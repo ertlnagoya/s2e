@@ -343,15 +343,43 @@ static void s2e_trace_memory_access_slow(
         int isWrite, int isIO)
 {
     uint64_t value = 0;
-    unsigned copy_size = (size > sizeof value) ? sizeof (value) : size;
+    unsigned copy_size = (size > sizeof(value)) ? sizeof (value) : size;
     memcpy(&value, buf, copy_size);
+    klee::ref<klee::Expr> exprValue = klee::ConstantExpr::create(value, copy_size << 3);
 
     try {
-        g_s2e->getCorePlugin()->onDataMemoryAccess.emit(g_s2e_state,
+        klee::ref<klee::Expr> exprResult = g_s2e->getCorePlugin()->onDataMemoryAccess.emit(g_s2e_state,
             klee::ConstantExpr::create(vaddr, 64),
             klee::ConstantExpr::create(haddr, 64),
-            klee::ConstantExpr::create(value, copy_size << 3),
+            exprValue,
             isWrite, isIO);
+
+        if (exprResult.isNull())
+        {
+            //Do nothing. HAHA!
+        }
+        else if (isa<klee::ConstantExpr>(exprResult))
+        {
+            if (cast<klee::ConstantExpr>(exprResult)->getWidth() / 8 != copy_size)
+            {
+                g_s2e->getWarningsStream() << "Return value size of onDataMemoryAccess signal handler differs from argument" << '\n';
+                //TODO: raise error
+                return;
+            }
+
+            uint64_t resultValue = cast<klee::ConstantExpr>(exprResult)->getZExtValue();
+
+            if (resultValue != value)
+                memcpy(buf, &resultValue, copy_size);
+        }
+        else
+        {
+            g_s2e->getDebugStream() << "DEBUG: onDataMemoryAccess returned symbolic value in concrete mode, switching to symbolic mode ..." << '\n';
+            g_s2e_state->jumpToSymbolicCpp();
+        }
+
+
+
     } catch(s2e::CpuExitException&) {
         s2e_longjmp(env->jmp_env, 1);
     }
