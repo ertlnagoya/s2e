@@ -18,7 +18,7 @@ ASTKind.h ASTKind.cpp: ASTKind.kinds genkinds.pl
 
 $(OBJS): ASTKind.h
 
-.PHONY: clean
+.PHONY: clean depend
 clean:
 	$(RM) *.o */*.o *~ *.a  .#* depend ASTKind.cpp ASTKind.h
 
