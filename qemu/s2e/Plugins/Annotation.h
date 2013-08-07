@@ -211,6 +211,7 @@ private:
     Annotation *m_plugin;
     bool m_doSkip;
     bool m_doKill;
+    bool m_doGenerateTestcase;
     bool m_isReturn;
     bool m_isInstruction;
     S2EExecutionState *m_state;
@@ -225,6 +226,7 @@ public:
 
     int setSkip(lua_State *L);
     int setKill(lua_State *L);
+    int setGenerateTestcase(lua_State *L);
     int activateRule(lua_State *L);
     int isReturn(lua_State *L);
     int isCall(lua_State *L);

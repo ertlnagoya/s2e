@@ -426,6 +426,12 @@ void Annotation::invokeAnnotation(
     Lunar<LUAAnnotation>::push(L, &luaAnnotation);
     lua_call(L, 2, 0);
 
+    if (luaAnnotation.m_doGenerateTestcase) {
+        std::stringstream ss;
+        ss << "Annotation " << entry->cfgname << " requested test case generation";
+        s2e()->getCorePlugin()->onTestCaseGeneration.emit(state, ss.str());
+    }
+
     if (luaAnnotation.m_doKill) {
         std::stringstream ss;
         ss << "Annotation " << entry->cfgname << " killed us";
@@ -511,6 +517,7 @@ const char LUAAnnotation::className[] = "LUAAnnotation";
 Lunar<LUAAnnotation>::RegType LUAAnnotation::methods[] = {
   LUNAR_DECLARE_METHOD(LUAAnnotation, setSkip),
   LUNAR_DECLARE_METHOD(LUAAnnotation, setKill),
+  LUNAR_DECLARE_METHOD(LUAAnnotation, setGenerateTestcase),
   LUNAR_DECLARE_METHOD(LUAAnnotation, activateRule),
   LUNAR_DECLARE_METHOD(LUAAnnotation, isReturn),
   LUNAR_DECLARE_METHOD(LUAAnnotation, isCall),
@@ -525,6 +532,7 @@ LUAAnnotation::LUAAnnotation(Annotation *plg, S2EExecutionState *state)
 {
     m_plugin = plg;
     m_doKill = false;
+    m_doGenerateTestcase = false;
     m_doSkip = false;
     m_isReturn = false;
     m_isInstruction = false;
@@ -535,6 +543,7 @@ LUAAnnotation::LUAAnnotation(lua_State *lua)
 {
     m_plugin = NULL;
     m_doKill = false;
+    m_doGenerateTestcase = false;
     m_doSkip = false;
     m_isReturn = false;
     m_isInstruction = false;
@@ -560,6 +569,15 @@ int LUAAnnotation::setKill(lua_State *L)
     m_doKill = lua_toboolean(L, 1);
 
     g_s2e->getDebugStream() << "LUAAnnotation: setKill " << m_doKill << '\n';
+    return 0;
+}
+
+int LUAAnnotation::setGenerateTestcase(lua_State *L)
+{
+
+    m_doGenerateTestcase = lua_toboolean(L, 1);
+
+    g_s2e->getDebugStream() << "LUAAnnotation: setGenerateTestcase " << m_doGenerateTestcase << '\n';
     return 0;
 }
 
