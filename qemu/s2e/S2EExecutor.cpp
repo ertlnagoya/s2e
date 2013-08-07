@@ -81,6 +81,7 @@ uint64_t helper_set_cc_op_eflags(void);
 #include <s2e/S2EExecutionState.h>
 #include <s2e/Utils.h>
 #include <s2e/Plugins/CorePlugin.h>
+#include <s2e/ConfigFile.h>
 
 #include <s2e/S2EDeviceState.h>
 #include <s2e/SelectRemovalPass.h>
@@ -2174,7 +2175,15 @@ void S2EExecutor::terminateStateEarly(klee::ExecutionState &state, const llvm::T
 {
     S2EExecutionState  *s2estate = static_cast<S2EExecutionState*>(&state);
     m_s2e->getMessagesStream(s2estate) << message << '\n';
-    m_s2e->getCorePlugin()->onTestCaseGeneration.emit(s2estate, message.str());
+    std::vector<std::string> cfg = m_s2e->getConfig()->getListKeys("s2e");
+    bool gen_testcase = true;
+
+    // Whether to generate testcase
+    if (std::find(cfg.begin(), cfg.end(), "generate_testcase_on_kill") != cfg.end())	{
+        gen_testcase = m_s2e->getConfig()->getBool("s2e.generate_testcase_on_kill", gen_testcase);
+    }
+    if (gen_testcase)
+        m_s2e->getCorePlugin()->onTestCaseGeneration.emit(s2estate, message.str());
     terminateState(state);
 }
 
