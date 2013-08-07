@@ -45,6 +45,8 @@
 #include <s2e/Plugins/OSMonitor.h>
 #include <s2e/ConfigFile.h>
 
+#include <list>
+
 namespace s2e {
 namespace plugins {
 
@@ -85,6 +87,16 @@ namespace plugins {
         }
     };
 
+    struct MemoryAnnotationCfgEntry
+    {
+        std::string annotation;
+        uint64_t rangeStart;
+        uint64_t rangeSize;
+
+        bool operator()(const MemoryAnnotationCfgEntry *a1, const MemoryAnnotationCfgEntry* a2) const {
+            return a1->rangeStart < a2->rangeStart;
+        }
+    };
 
 class LUAAnnotation;
 
@@ -103,6 +115,7 @@ private:
     ModuleExecutionDetector *m_moduleExecutionDetector;
     OSMonitor *m_osMonitor;
     CfgEntries m_entries;
+    std::list<MemoryAnnotationCfgEntry> m_memoryAnnotations;
 
     //To instrument specific instructions in the code
     bool m_translationEventConnected;
@@ -174,6 +187,12 @@ private:
             uint64_t targetPc);
 
     void onInstruction(S2EExecutionState *state, uint64_t pc);
+
+    klee::ref<klee::Expr> onDataMemoryAccess(S2EExecutionState*,
+            klee::ref<klee::Expr> virtualAddress,
+            klee::ref<klee::Expr> hostAddress,
+            klee::ref<klee::Expr> value,
+            bool isWrite, bool isIO);
 
     void invokeAnnotation(
             S2EExecutionState* state,

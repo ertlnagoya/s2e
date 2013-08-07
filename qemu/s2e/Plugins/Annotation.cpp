@@ -196,11 +196,20 @@ bool Annotation::initSection(const std::string &entry, const std::string &cfgnam
     } else if (std::find(cfgkeys.begin(), cfgkeys.end(), "instructionAnnotation") != cfgkeys.end())	{
         e.annotation = cfg->getString(entry + ".instructionAnnotation", e.annotation, &ok);
         e.isCallAnnotation = false;
+    } else if (std::find(cfgkeys.begin(), cfgkeys.end(), "memoryAnnotation") != cfgkeys.end()) {
+        MemoryAnnotationCfgEntry memAnnotation;
+
+        memAnnotation.annotation = e.annotation;
+        memAnnotation.rangeStart = cfg->getInt(".rangeStart", 0, &ok);
+        memAnnotation.rangeSize = cfg->getInt(".rangeSize", 0, &ok);
+
+        m_memoryAnnotations.push_back(memAnnotation);
     }
+
 
     // Assert that this is a properly attached annotation
     if (!ok || e.annotation=="") {
-        os << "You must specify either " << entry << ".callAnnotation or .instructionAnnotation!" << '\n';
+        os << "You must specify one of " << entry << ".callAnnotation, .memoryAnnotation or .instructionAnnotation!" << '\n';
         return false;
     }
 
@@ -223,6 +232,11 @@ bool Annotation::initSection(const std::string &entry, const std::string &cfgnam
 
     ne = new AnnotationCfgEntry(e);
     m_entries.insert(ne);
+
+    if (m_memoryAnnotations.size() > 0)
+    {
+        s2e()->getCorePlugin()->onDataMemoryAccess.connect(sigc::mem_fun(*this, &Annotation::onDataMemoryAccess));
+    }
 
     return true;
 }
@@ -248,6 +262,57 @@ void Annotation::onTimer()
     lua_getfield(L, LUA_GLOBALSINDEX, m_onTimer.c_str());
     Lunar<LUAAnnotation>::push(L, &luaAnnotation);
     lua_call(L, 1, 0);
+}
+
+klee::ref<klee::Expr> Annotation::onDataMemoryAccess(S2EExecutionState *state,
+        klee::ref<klee::Expr> virtualAddress,
+        klee::ref<klee::Expr> hostAddress,
+        klee::ref<klee::Expr> value,
+        bool isWrite, bool isIO)
+{
+    //TODO: hostAddress not taken into account
+    if (!isa<klee::ConstantExpr>(virtualAddress))
+    {
+        s2e()->getWarningsStream() << "[Annotations] Cannot handle a symbolic address" << '\n';
+        return klee::ref<klee::Expr>();
+    }
+
+    uint64_t address = cast<klee::ConstantExpr>(virtualAddress)->getZExtValue();
+    uint64_t concreteValue = 0;
+
+    if (!isa<klee::ConstantExpr>(value))
+    {
+        s2e()->getWarningsStream() << "[Annotations] Do not know how to handle a symbolic value" << '\n';
+    }
+    else
+    {
+        concreteValue  = cast<klee::ConstantExpr>(virtualAddress)->getZExtValue();
+    }
+
+    for (std::list<MemoryAnnotationCfgEntry>::const_iterator itr = m_memoryAnnotations.begin();
+         itr != m_memoryAnnotations.end();
+         itr++)
+    {
+        if (itr->rangeStart <= address && itr->rangeStart + itr->rangeSize >= address)
+        {
+            lua_State *L = s2e()->getConfig()->getState();
+            LUAAnnotation luaAnnotation(this, state);
+            S2ELUAExecutionState lua_s2e_state(state);
+
+            lua_getfield(L, LUA_GLOBALSINDEX, itr->annotation.c_str());
+
+            lua_pushboolean(L, isIO);
+            lua_pushboolean(L, isWrite);
+            lua_pushnumber(L, concreteValue);
+            lua_pushnumber(L, address);
+            Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
+            Lunar<LUAAnnotation>::push(L, &luaAnnotation);
+            lua_call(L, 6, 0);
+            //TODO: Fire annotation
+        }
+    }
+
+    return klee::ref<klee::Expr>();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
