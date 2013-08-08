@@ -74,19 +74,41 @@ void MaxCodeCoverageSearcher::initialize()
 
 void MaxCodeCoverageSearcher::slotInitialize(S2EExecutionState *state)
 {
+    klee::Searcher *previousSearcher = 0;
+    klee::Searcher *newSearcher = 0;
+
     s2e()->getDebugStream() << "MaxCodeCoverageSearcher::initializeSearcher called" << '\n';
 
-//    m_parentSearcher = s2e()->getExecutor()->getSearcher();
-//    assert(m_parentSearcher);
+    previousSearcher = s2e()->getExecutor()->getSearcher();
+
+    assert(previousSearcher && "No searcher set in klee");
+
     if (m_timeBudget == 0.0)
     {
-        s2e()->getExecutor()->setSearcher(this);
+        newSearcher = this;
     }
     else
     {
         m_batchingSearcher = new klee::BatchingSearcher(this, m_timeBudget, 1000);
+        newSearcher = m_batchingSearcher;
         s2e()->getExecutor()->setSearcher(m_batchingSearcher);
     }
+
+    newSearcher->addState(state, state);
+
+    while (!previousSearcher->empty())
+    {
+        klee::ExecutionState& prevState = previousSearcher->selectState();
+
+        if (static_cast<S2EExecutionState *>(&prevState)->getID() != state->getID())
+            newSearcher->addState(&prevState, static_cast<klee::ExecutionState *>(state));
+
+        previousSearcher->removeState(&prevState, static_cast<klee::ExecutionState *>(state));
+    }
+
+    delete previousSearcher;
+
+    s2e()->getExecutor()->setSearcher(newSearcher);
 }
 
 struct CodeCoverageComparator
@@ -144,8 +166,8 @@ void MaxCodeCoverageSearcher::update(klee::ExecutionState *current,
         s2e()->getDebugStream() << "MaxCodeCoverageSearcher::update called" << '\n';
 //    m_parentSearcher->update(current, addedStates, removedStates);
 
-    if (current && m_states.empty())
-        m_states.push_back(static_cast<S2EExecutionState *>(current));
+//    if (current && m_states.empty())
+//        m_states.push_back(static_cast<S2EExecutionState *>(current));
 
 
     foreach2(it, removedStates.begin(), removedStates.end()) {
