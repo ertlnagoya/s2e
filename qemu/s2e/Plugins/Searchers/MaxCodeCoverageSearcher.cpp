@@ -67,6 +67,8 @@ void MaxCodeCoverageSearcher::initialize()
     s2e()->getCorePlugin()->onTranslateBlockStart.connect(
             sigc::mem_fun(*this, &MaxCodeCoverageSearcher::slotTranslateBlockStart));
 
+    s2e()->getCorePlugin()->onStateFork.connect(sigc::mem_fun(*this, &MaxCodeCoverageSearcher::slotStateFork));
+
     assert(s2e()->getPlugin("Initializer") && "MaxCodeCoverageSearcher requires Initializer plugin");
     static_cast<Initializer *>(s2e()->getPlugin("Initializer"))->onInitialize.connect(sigc::mem_fun(*this, &MaxCodeCoverageSearcher::slotInitialize));
 
@@ -268,9 +270,12 @@ void MaxCodeCoverageSearcher::slotExecuteBlockStart(
         plgState->m_metric = penaltyFunction(plgState->m_metric, m_executedBasicBlocks[block_pc]);
         m_executedBasicBlocks[block_pc] += 1;
     }
+}
 
-
-
+void MaxCodeCoverageSearcher::slotStateFork(S2EExecutionState* originalState,
+                    const std::vector<S2EExecutionState*>& newStates,
+                    const std::vector<klee::ref<klee::Expr> >& newConditions)
+{
 }
 
 

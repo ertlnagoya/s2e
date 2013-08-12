@@ -120,6 +120,10 @@ private:
             S2EExecutionState *state,
             uint64_t block_pc);
 
+    void slotStateFork(S2EExecutionState* originalState,
+                        const std::vector<S2EExecutionState*>& newStates,
+                        const std::vector<klee::ref<klee::Expr> >& newConditions);
+
     void slotInitialize(S2EExecutionState *state);
 
     friend class MaxCodeCoverageSearcherState;
