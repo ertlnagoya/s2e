@@ -67,7 +67,7 @@ private:
     uint64_t m_metric;
     MaxCodeCoverageSearcher *m_plugin;
     S2EExecutionState *m_state;
-    std::map<uint64_t, uint64_t> m_executedBasicBlocks; //Maps basic block to the number of times it was executed
+    std::map<uint64_t, uint64_t> *m_executedBasicBlocks; //Maps basic block to the number of times it was executed
 public:
 
     MaxCodeCoverageSearcherState();

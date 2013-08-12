@@ -200,15 +200,19 @@ MaxCodeCoverageSearcher::~MaxCodeCoverageSearcher()
 MaxCodeCoverageSearcherState::MaxCodeCoverageSearcherState()
     : m_metric(0),
       m_plugin(0),
-      m_state(0)
+      m_state(0),
+      m_executedBasicBlocks(0)
 {
 }
 
 MaxCodeCoverageSearcherState::MaxCodeCoverageSearcherState(S2EExecutionState *s, Plugin *p)
     : m_metric(0),
       m_plugin(static_cast<MaxCodeCoverageSearcher*>(p)),
-      m_state(s)
+      m_state(s),
+      m_executedBasicBlocks(0)
 {
+    if (static_cast<MaxCodeCoverageSearcher *>(p)->m_perStateCodeCoverage)
+        m_executedBasicBlocks = new std::map<uint64_t, uint64_t>();
 }
 
 MaxCodeCoverageSearcherState::~MaxCodeCoverageSearcherState()
@@ -217,12 +221,20 @@ MaxCodeCoverageSearcherState::~MaxCodeCoverageSearcherState()
 
 PluginState *MaxCodeCoverageSearcherState::clone() const
 {
-    return new MaxCodeCoverageSearcherState(*this);
+    MaxCodeCoverageSearcherState *newState = new MaxCodeCoverageSearcherState();
+    newState->m_metric = m_metric;
+    newState->m_plugin = m_plugin;
+    newState->m_state = m_state;
+    if (m_executedBasicBlocks)
+        newState->m_executedBasicBlocks = new std::map<uint64_t, uint64_t>(*m_executedBasicBlocks);
+
+    return newState;
 }
 
 PluginState *MaxCodeCoverageSearcherState::factory(Plugin *p, S2EExecutionState *s)
 {
     MaxCodeCoverageSearcherState *ret = new MaxCodeCoverageSearcherState(s, p);
+    p->s2e()->getWarningsStream() << "Creating new MaxCodeCoverageSearcherState" << '\n';
     return ret;
 }
 
@@ -248,15 +260,17 @@ void MaxCodeCoverageSearcher::slotExecuteBlockStart(
 
     if (m_perStateCodeCoverage)
     {
-        plgState->m_metric = penaltyFunction(plgState->m_metric, plgState->m_executedBasicBlocks[block_pc]);
+        plgState->m_metric = penaltyFunction(plgState->m_metric, plgState->m_executedBasicBlocks->operator[](block_pc));
+        plgState->m_executedBasicBlocks->operator[](block_pc) += 1;
     }
     else
     {
         plgState->m_metric = penaltyFunction(plgState->m_metric, m_executedBasicBlocks[block_pc]);
+        m_executedBasicBlocks[block_pc] += 1;
     }
 
-    plgState->m_executedBasicBlocks[block_pc] += 1;
-    m_executedBasicBlocks[block_pc] += 1;
+
+
 }
 
 
