@@ -47,6 +47,12 @@
 namespace s2e {
 namespace plugins {
 
+#ifdef TARGET_ARM
+#define NR_REG ARM_NR_REG
+#else
+#define NR_REG X86_NR_REG
+#endif
+
 #define TB_TRACER_OPCODE 0xAD
 
 class TranslationBlockTracer : public Plugin

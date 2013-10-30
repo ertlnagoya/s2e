@@ -50,6 +50,9 @@
 #undef EBP
 #undef ESP
 
+#define ARM_NR_REG 15
+#define X86_NR_REG 8
+
 namespace s2e {
 namespace plugins {
 
@@ -71,6 +74,7 @@ enum ExecTraceEntryType {
     TRACE_TLBMISS,
     TRACE_ICOUNT,
     TRACE_MEM_CHECKER,
+    TRACE_INSTR_START,
     TRACE_MAX
 };
 
@@ -380,6 +384,37 @@ struct ExecutionTraceTb
 
     uint32_t symbMask;
     uint64_t registers[16];
+
+}__attribute__((packed));
+
+// Instruction tracing
+struct ExecutionTraceInstr
+{
+	// Type of supported CPU
+    enum CPUType
+    {
+         X86    = 0,
+         X86_64 = 1,
+         ARM    = 2
+    };
+
+    bool isSymbolic;
+
+    CPUType arch;
+
+    // Current PC
+    uint64_t pc;
+    // Bitmask of symbolic registers
+    uint32_t symbMask;
+    // Processor flags
+    uint64_t flags;
+
+    // Dump of registers (excluding PC)
+    union {
+        uint32_t arm_registers[ARM_NR_REG];
+        uint32_t x86_registers[X86_NR_REG];
+        uint64_t x64_registers[X86_NR_REG];
+    } __attribute__((packed));
 
 }__attribute__((packed));
 

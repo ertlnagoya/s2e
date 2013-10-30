@@ -48,12 +48,6 @@ extern CPUArchState *env;
 
 #include <iostream>
 
-#ifdef TARGET_ARM
-#define NR_REG 15
-#else
-#define NR_REG 8
-#endif
-
 namespace s2e {
 namespace plugins {
 
