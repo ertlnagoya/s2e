@@ -354,6 +354,8 @@ static void board_init(ram_addr_t ram_size,
             uint64_t address;
             int is_first_mapping = TRUE;
             int alias_num = 0;
+            int endianness = DEVICE_NATIVE_ENDIAN;
+
  //           void * ram_ptr;
 
             g_assert(qobject_type(entry->value) == QTYPE_QDICT);
@@ -369,6 +371,23 @@ static void board_init(ram_addr_t ram_size,
             name = qdict_get_str(mapping, "name");
             is_rom = qdict_haskey(mapping, "is_rom") && qdict_get_bool(mapping, "is_rom");
             size = qdict_get_int(mapping, "size");
+
+            if (qdict_haskey(mapping, "endianness"))
+            {
+            	const char * value;
+            	g_assert(qobject_type(qdict_get(mapping, "endianness")) == QTYPE_QSTRING);
+
+            	value = qdict_get_str(mapping, "endianness");
+
+            	if (strcasecmp(value, "big") == 0)
+            		endianness = DEVICE_BIG_ENDIAN;
+            	else if (strcasecmp(value, "little") == 0)
+            		endianness = DEVICE_LITTLE_ENDIAN;
+            	else
+            		g_assert(0);
+
+
+            }
 
             ram =  g_new(MemoryRegion, 1);
             g_assert(ram);
