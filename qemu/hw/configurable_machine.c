@@ -262,6 +262,8 @@ static void board_init(ram_addr_t ram_size,
 {
     CPUArchState * cpu;
     QDict * conf = NULL;
+    int instruction_endianness = DEVICE_LITTLE_ENDIAN;
+
     uint64_t entry_address=0;
 
     //Load configuration file
@@ -295,10 +297,41 @@ static void board_init(ram_addr_t ram_size,
         exit(1);
     }
 
+
+
 #ifdef CONFIG_S2E
     s2e_register_cpu(g_s2e, g_s2e_state, cpu);
 #endif
 
+    if (qdict_haskey(conf, "instruction_endianness"))
+    {
+        const char * value;
+        g_assert(qobject_type(qdict_get(conf, "instruction_endianness")) == QTYPE_QSTRING);
+
+        value = qdict_get_str(conf, "instruction_endianness");
+
+        if (strcasecmp(value, "big") == 0)
+            instruction_endianness = DEVICE_BIG_ENDIAN;
+        else if (strcasecmp(value, "little") == 0)
+            instruction_endianness = DEVICE_LITTLE_ENDIAN;
+        else
+            g_assert(0); //If the instruction_endianness key is specified, it must have the value 'little' or 'big'.
+
+#if defined(TARGET_ARM)
+        //TODO: What if host is big endian?
+        if (instruction_endianness == DEVICE_BIG_ENDIAN)
+        {
+            ((CPUARMState *) cpu)->bswap_code = 1;
+        }
+        else
+        {
+            ((CPUARMState *) cpu)->bswap_code = 0;
+        }
+#else /* defined(TARGET_ARM) */
+        //TODO: endianness conversion for non-ARM platforms
+#endif /* defined(TARGET_ARM) */
+
+    }
     //Configure memory
     if (qdict_haskey(conf, "memory_map"))
     {
@@ -321,8 +354,6 @@ static void board_init(ram_addr_t ram_size,
             uint64_t address;
             int is_first_mapping = TRUE;
             int alias_num = 0;
-            int endianness = DEVICE_NATIVE_ENDIAN;
-
  //           void * ram_ptr;
 
             g_assert(qobject_type(entry->value) == QTYPE_QDICT);
@@ -338,23 +369,6 @@ static void board_init(ram_addr_t ram_size,
             name = qdict_get_str(mapping, "name");
             is_rom = qdict_haskey(mapping, "is_rom") && qdict_get_bool(mapping, "is_rom");
             size = qdict_get_int(mapping, "size");
-
-            if (qdict_haskey(mapping, "endianness"))
-            {
-            	const char * value;
-            	g_assert(qobject_type(qdict_get(mapping, "endianness")) == QTYPE_QSTRING);
-
-            	value = qdict_get_str(mapping, "endianness");
-
-            	if (strcasecmp(value, "big") == 0)
-            		endianness = DEVICE_BIG_ENDIAN;
-            	else if (strcasecmp(value, "little") == 0)
-            		endianness = DEVICE_LITTLE_ENDIAN;
-            	else
-            		g_assert(0);
-
-
-            }
 
             ram =  g_new(MemoryRegion, 1);
             g_assert(ram);
