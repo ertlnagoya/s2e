@@ -100,14 +100,14 @@
 #define S2EINLINE
 #define S2E_TRACE_MEMORY(vaddr, haddr, value, isWrite, isIO) \
     tcg_llvm_trace_memory_access(vaddr, haddr, \
-                                 value, 8*sizeof(value), isWrite, isIO);
+                                 value, 8*DATA_SIZE, isWrite, isIO);
 #define S2E_FORK_AND_CONCRETIZE(val, max) \
     tcg_llvm_fork_and_concretize(val, 0, max)
 #else // S2E_LLVM_LIB
 #define S2EINLINE inline
 #define S2E_TRACE_MEMORY(vaddr, haddr, value, isWrite, isIO) \
     s2e_trace_memory_access(vaddr, haddr, \
-                            (uint8_t*) &value, sizeof(value), isWrite, isIO);
+                            (uint8_t*) &value, DATA_SIZE, isWrite, isIO);
 #define S2E_FORK_AND_CONCRETIZE(val, max) (val)
 #endif // S2E_LLVM_LIB
 
