@@ -534,6 +534,7 @@ s2eobj-y += s2e/x64.o
 # Eurecom plugins for the Avatar framework:
 # http://www.s3.eurecom.fr/tools/avatar/
 s2eobj-y += s2e/Plugins/MemoryInterceptorMediator.o
+s2eobj-y += s2e/Plugins/ArbitraryExecChecker.o
 
 ifeq ($(TARGET_BASE_ARCH), i386)
 	s2eobj-y += $(s2eobj-i386-y) $(s2eobj-win-y)
