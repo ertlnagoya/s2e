@@ -541,6 +541,7 @@ s2eobj-y += s2e/Plugins/RemoteMemory.o
 s2eobj-y += s2e/Plugins/InstructionPrinter.o
 s2eobj-y += s2e/Plugins/MemInjector2.o
 s2eobj-y += s2e/Plugins/MemoryMonitor.o
+s2eobj-y += s2e/Plugins/RemoteControl.o
 
 ifeq ($(TARGET_BASE_ARCH), i386)
 	s2eobj-y += $(s2eobj-i386-y) $(s2eobj-win-y)
