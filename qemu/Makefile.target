@@ -542,6 +542,7 @@ s2eobj-y += s2e/Plugins/InstructionPrinter.o
 s2eobj-y += s2e/Plugins/MemInjector2.o
 s2eobj-y += s2e/Plugins/MemoryMonitor.o
 s2eobj-y += s2e/Plugins/RemoteControl.o
+s2eobj-y += s2e/Plugins/Searchers/MaxCodeCoverageSearcher.o
 
 ifeq ($(TARGET_BASE_ARCH), i386)
 	s2eobj-y += $(s2eobj-i386-y) $(s2eobj-win-y)
@@ -570,6 +571,7 @@ s2e/Plugins/ExecutionTracers/CallRetTracer.o: QEMU_CXXFLAGS+=-fno-inline
 s2e/Plugins/ExecutionTracers/InstructionCounter.o: QEMU_CXXFLAGS+=-fno-inline
 s2e/Plugins/ExecutionTracers/TranslationBlockTracer.o: QEMU_CXXFLAGS+=-fno-inline
 s2e/Plugins/Searchers/MaxTbSearcher.o: QEMU_CXXFLAGS+=-fno-inline
+s2e/Plugins/Searchers/MaxCodeCoverageSearcher.o: QEMU_CXXFLAGS+=-fno-inline
 s2e/Plugins/Searchers/CooperativeSearcher.o: QEMU_CXXFLAGS+=-fno-inline
 s2e/Plugins/WindowsApi/NdisHandlers.o: QEMU_CXXFLAGS+=-fno-inline
 s2e/Plugins/WindowsApi/NdisProtocolHandlers.o: QEMU_CXXFLAGS+=-fno-inline
