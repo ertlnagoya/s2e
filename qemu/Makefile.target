@@ -539,6 +539,7 @@ s2eobj-y += s2e/Plugins/ArbitraryExecChecker.o
 s2eobj-y += s2e/Plugins/RemoteMemory.o
 
 s2eobj-y += s2e/Plugins/InstructionPrinter.o
+s2eobj-y += s2e/Plugins/MemInjector2.o
 s2eobj-y += s2e/Plugins/MemoryMonitor.o
 
 ifeq ($(TARGET_BASE_ARCH), i386)
