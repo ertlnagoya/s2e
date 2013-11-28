@@ -6849,7 +6849,9 @@ static void disas_arm_insn(CPUARMState * env, DisasContext *s)
             /* setend */
             if (insn & (1 << 9)) {
                 /* BE8 mode not implemented.  */
+#ifndef TARGET_WORDS_BIGENDIAN
                 goto illegal_op;
+#endif
             }
             return;
         } else if ((insn & 0x0fffff00) == 0x057ff000) {
