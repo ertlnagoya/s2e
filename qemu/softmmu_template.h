@@ -581,9 +581,9 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
             retaddr = GETPC();
 #endif
             ioaddr = env->iotlb[mmu_idx][index];
+            S2E_TRACE_MEMORY(addr, addr+ioaddr, val, 1, 1);
             glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, val, addr, retaddr);
 
-            S2E_TRACE_MEMORY(addr, addr+ioaddr, val, 1, 1);
         } else if (unlikely(((addr & ~S2E_RAM_OBJECT_MASK) + DATA_SIZE - 1) >= S2E_RAM_OBJECT_SIZE)) {
 
         do_unaligned_access:
@@ -606,15 +606,16 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
             }
 #endif
             addend = env->tlb_table[mmu_idx][index].addend;
+            S2E_TRACE_MEMORY(addr, addr+addend, val, 1, 0);
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
             S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
             if(likely((e->addend & 1) && _s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE)))
                 glue(glue(st, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)), val);
             else
 #endif
+            {
                 glue(glue(st, SUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend), val);
-
-            S2E_TRACE_MEMORY(addr, addr+addend, val, 1, 0);
+            }
         }
     } else {
         /* the page is not in the TLB : fill it */
@@ -655,9 +656,9 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_PARAM
             if ((addr & (DATA_SIZE - 1)) != 0)
                 goto do_unaligned_access;
             ioaddr = env->iotlb[mmu_idx][index];
-            glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, val, addr, retaddr);
 
             S2E_TRACE_MEMORY(addr, addr+ioaddr, val, 1, 1);
+            glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, val, addr, retaddr);
         } else if (((addr & ~S2E_RAM_OBJECT_MASK) + DATA_SIZE - 1) >= S2E_RAM_OBJECT_SIZE) {
 
         do_unaligned_access:
@@ -679,15 +680,14 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_PARAM
             /* aligned/unaligned access in the same page */
             addend = env->tlb_table[mmu_idx][index].addend;
 
+            S2E_TRACE_MEMORY(addr, addr+addend, val, 1, 0);
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
             S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
             if((e->addend & 1) && _s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE))
                 glue(glue(st, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)), val);
             else
 #endif
-                glue(glue(st, SUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend), val);
-
-            S2E_TRACE_MEMORY(addr, addr+addend, val, 1, 0);
+            glue(glue(st, SUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend), val);
         }
     } else {
         /* the page is not in the TLB : fill it */
