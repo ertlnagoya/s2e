@@ -89,7 +89,13 @@ static void io_write_chk(S2EExecutionState *state,
     env->mem_io_vaddr = addr;
     env->mem_io_pc = (uintptr_t)retaddr;
 #ifdef TARGET_WORDS_BIGENDIAN
-    #error This is not implemented yet.
+    if (s2e_ismemfunc(mr, 1))
+    {
+        uintptr_t pa = s2e_notdirty_mem_write(physaddr);
+        //TODO: [J] Byteswap val here
+        state->writeMemory(pa, val, S2EExecutionState::HostAddress);
+        return;
+    }
 #else
     if (s2e_ismemfunc(mr, 1)) {
         uintptr_t pa = s2e_notdirty_mem_write(physaddr);
@@ -149,6 +155,8 @@ static ref<Expr> io_read_chk(S2EExecutionState *state,
         if (isSymb) {
             return state->createSymbolicValue(ss.str(), width);
         }
+
+        //TODO: [J] Byteswap value after reading
         return state->readMemory(pa, width, S2EExecutionState::HostAddress);
     }
 
@@ -349,6 +357,7 @@ ref<Expr> S2EExecutor::handle_ldst_mmu(Executor* executor,
                 for(int i = data_size - 1; i >= 0; i--) {
                     std::vector<ref<Expr> > unalignedAccessArgs;
                     #ifdef TARGET_WORDS_BIGENDIAN
+                    //TODO: [J] Check what is happening here
                     ref<Expr> shiftCount = ConstantExpr::create((((data_size - 1) * 8) - (i * 8)), Expr::Int32);
                     #else
                     ref<Expr> shiftCount = ConstantExpr::create(i * 8, Expr::Int32);
@@ -377,6 +386,7 @@ ref<Expr> S2EExecutor::handle_ldst_mmu(Executor* executor,
                 ref<Expr> shift2 = ConstantExpr::create((data_size * 8) - ((addr & (data_size - 1)) * 8), Expr::Int32);
 
                 #ifdef TARGET_WORDS_BIGENDIAN
+                //TODO: [J] Check what is happening here
                 value = OrExpr::create(ShlExpr::create(value1, shift), LShrExpr::create(value2, shift2));
                 #else
                 value = OrExpr::create(LShrExpr::create(value1, shift), ShlExpr::create(value2, shift2));

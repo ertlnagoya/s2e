@@ -521,7 +521,7 @@ inline void glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_PARAM target_phys_ad
     }
 #else
 #ifdef TARGET_WORDS_BIGENDIAN
-    if (s2e_ismemfunc(s2e_ismemfunc(mr, 1)) {
+    if (s2e_ismemfunc(mr, 1)) {
         uintptr_t pa = s2e_notdirty_mem_write(physaddr);
         stl_raw((uint8_t *)(intptr_t)(pa), val>>32);
         stl_raw((uint8_t *)(intptr_t)(pa+4), val);
