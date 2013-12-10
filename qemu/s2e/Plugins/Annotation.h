@@ -34,9 +34,10 @@
  */
 
 /**
- * Example for an Annotation:
+ * - Currently only one memory annotation can be made per address. If there are
+ *   several ranges that include an address, only the first one will be notified.
  *
- * This is the configuration used for the annotation:
+ * This is the configuration used for the memory annotation:
  *     Annotation = {
  *       uart_read = {
  *           module = "bootloader",
@@ -55,25 +56,25 @@
  * function ann_read_serial(state, s2e, address, width, value, is_write, is_io)
  *   -- we are not interested in writes
  *   if is_write then
- *       return value
+ *       return false, value
  *    end
  *
  *    if address == 0xfffb8018 then
- *        return 0x80 --TXFE set, RXFE not set
+ *        return false, 0x80 --TXFE set, RXFE not set
  *    elseif address == 0xfffb8004 then
- *        return 0x0
+ *        return false, 0x0
  *    else
  *        local pc = s2e:readRegister("pc")
  *        if pc >= 0xe8b4 and pc < 0xe8ec then
  *           --In uart_reset we don't care about the return value
- *           return 0
+ *           return false, 0
  *        elseif pc >= 0xE8F0 and pc < 0xE91C then
  *           local str_mfgt1 = "MFGT1"
  *           state:setValue("mfg_state", state:getValue("mfg_state") + 1)
  *           if state:getValue("mfg_state") > 5 then
  *               state:setValue("mfg_state", 1)
  *           end
- *           return string.byte(str_mfgt1, state:getValue("mfg_state"))
+ *           return false, string.byte(str_mfgt1, state:getValue("mfg_state"))
  *        else
  *           io.write(string.format("serial: Unknown access at address 0x%x, pc 0x%x\n", address, s2e:readRegister("pc")))
  *        end

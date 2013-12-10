@@ -280,7 +280,7 @@ klee::ref<klee::Expr> Annotation::onDataMemoryAccess(S2EExecutionState *state,
     }
 
     uint64_t address = cast<klee::ConstantExpr>(virtualAddress)->getZExtValue();
-    uint64_t width = cast<klee::ConstantExpr>(virtualAddress)->getWidth() / 8;
+    uint64_t width = value->getWidth();
     uint64_t concreteValue = 0;
 
     if (!isa<klee::ConstantExpr>(value))
@@ -307,22 +307,27 @@ klee::ref<klee::Expr> Annotation::onDataMemoryAccess(S2EExecutionState *state,
             Lunar<LUAAnnotation>::push(L, &luaAnnotation);
             Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
             lua_pushnumber(L, address);
-            lua_pushnumber(L, width);
+            lua_pushnumber(L, width / 8);
             lua_pushnumber(L, concreteValue);
             lua_pushboolean(L, isWrite);
             lua_pushboolean(L, isIO);
 
-            lua_call(L, 7, 1);
-            uint64_t new_value = lua_tonumber(L, lua_gettop(L));
-            lua_pop(L, 1);
+            lua_call(L, 7, 2);
+            bool is_symbolic = lua_toboolean(L, lua_gettop(L) - 1);
 
             //TODO: What if serveral annotations exist?
-            if (new_value != concreteValue)
+            if (is_symbolic)
             {
-    //            s2e()->getWarningsStream() << "Annotation returning value " << hexval(new_value) << " for address " << hexval(address) << '\n';
-                return klee::ref<klee::Expr>(klee::ConstantExpr::create(new_value, cast<klee::ConstantExpr>(value)->getWidth()));
+                std::string value_name(lua_tostring(L, lua_gettop(L)));
+                lua_pop(L, 2);
+                return state->createSymbolicValue(value_name, value->getWidth());
             }
-            //TODO: Fire annotation
+            else
+            {
+                uint64_t new_value = lua_tonumber(L, lua_gettop(L));
+                lua_pop(L, 2);
+                return klee::ref<klee::Expr>(klee::ConstantExpr::create(new_value, value->getWidth()));
+            }
         }
     }
 
