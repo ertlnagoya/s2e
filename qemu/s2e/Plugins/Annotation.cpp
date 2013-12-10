@@ -289,7 +289,7 @@ klee::ref<klee::Expr> Annotation::onDataMemoryAccess(S2EExecutionState *state,
     }
     else
     {
-        concreteValue  = cast<klee::ConstantExpr>(virtualAddress)->getZExtValue();
+        concreteValue  = cast<klee::ConstantExpr>(value)->getZExtValue();
     }
 
     for (std::list<MemoryAnnotationCfgEntry>::const_iterator itr = m_memoryAnnotations.begin();
