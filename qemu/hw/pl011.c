@@ -105,8 +105,7 @@ static uint64_t pl011_read(void *opaque, target_phys_addr_t offset,
     case 18: /* UARTDMACR */
         return s->dmacr;
     default:
-        printf("WARNING: pl011_read - unkown offset 0x%x", (int) offset);
-//        hw_error("pl011_read: Bad offset %x\n", (int)offset);
+        hw_error("pl011_read: Bad offset %x\n", (int)offset);
         return 0;
     }
 }
@@ -181,8 +180,7 @@ static void pl011_write(void *opaque, target_phys_addr_t offset,
             hw_error("PL011: DMA not implemented\n");
         break;
     default:
-        printf("WARNING: pl011_write - unkown offset 0x%x", (int) offset);
-//        hw_error("pl011_write: Bad offset %x\n", (int)offset);
+        hw_error("pl011_write: Bad offset %x\n", (int)offset);
     }
 }
 
