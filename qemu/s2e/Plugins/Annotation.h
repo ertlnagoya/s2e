@@ -33,6 +33,54 @@
  * All contributors are listed in the S2E-AUTHORS file.
  */
 
+/**
+ * Example for an Annotation:
+ *
+ * This is the configuration used for the annotation:
+ *     Annotation = {
+ *       uart_read = {
+ *           module = "bootloader",
+ *           active = true,
+ *           address = 0xfffb8000,
+ *           size = 0x100,
+ *           memoryAnnotation = "ann_read_serial",
+ *           beforeInstruction = true,
+ *           switchInstructionToSymbolic = true,
+ *
+ *       }
+ *     }
+ *
+ * And this is the annotation function:
+ *
+ * function ann_read_serial(state, s2e, address, width, value, is_write, is_io)
+ *   -- we are not interested in writes
+ *   if is_write then
+ *       return value
+ *    end
+ *
+ *    if address == 0xfffb8018 then
+ *        return 0x80 --TXFE set, RXFE not set
+ *    elseif address == 0xfffb8004 then
+ *        return 0x0
+ *    else
+ *        local pc = s2e:readRegister("pc")
+ *        if pc >= 0xe8b4 and pc < 0xe8ec then
+ *           --In uart_reset we don't care about the return value
+ *           return 0
+ *        elseif pc >= 0xE8F0 and pc < 0xE91C then
+ *           local str_mfgt1 = "MFGT1"
+ *           state:setValue("mfg_state", state:getValue("mfg_state") + 1)
+ *           if state:getValue("mfg_state") > 5 then
+ *               state:setValue("mfg_state", 1)
+ *           end
+ *           return string.byte(str_mfgt1, state:getValue("mfg_state"))
+ *        else
+ *           io.write(string.format("serial: Unknown access at address 0x%x, pc 0x%x\n", address, s2e:readRegister("pc")))
+ *        end
+ *    end
+ * end
+ */
+
 #ifndef S2E_PLUGINS_FUNCSKIPPER_H
 #define S2E_PLUGINS_FUNCSKIPPER_H
 

@@ -158,7 +158,6 @@ bool Annotation::initSection(const std::string &entry, const std::string &cfgnam
 
     bool ok;
 
-
     e.isActive = cfg->getBool(entry + ".active", false, &ok);
     if (!ok) {
         os << "You must specify whether the entry is active in " << entry << ".active!" << '\n';
@@ -199,9 +198,11 @@ bool Annotation::initSection(const std::string &entry, const std::string &cfgnam
     } else if (std::find(cfgkeys.begin(), cfgkeys.end(), "memoryAnnotation") != cfgkeys.end()) {
         MemoryAnnotationCfgEntry memAnnotation;
 
+        e.annotation = cfg->getString(entry + ".memoryAnnotation", e.annotation, &ok);
+        e.isCallAnnotation = false;
         memAnnotation.annotation = e.annotation;
-        memAnnotation.rangeStart = cfg->getInt(".rangeStart", 0, &ok);
-        memAnnotation.rangeSize = cfg->getInt(".rangeSize", 0, &ok);
+        memAnnotation.rangeStart = e.address;
+        memAnnotation.rangeSize = cfg->getInt(entry + ".size", 0, &ok);
 
         m_memoryAnnotations.push_back(memAnnotation);
     }
@@ -235,6 +236,7 @@ bool Annotation::initSection(const std::string &entry, const std::string &cfgnam
 
     if (m_memoryAnnotations.size() > 0)
     {
+        s2e()->getDebugStream() << "Annotation: Registering for memory accesses" << '\n';
         s2e()->getCorePlugin()->onDataMemoryAccess.connect(sigc::mem_fun(*this, &Annotation::onDataMemoryAccess));
     }
 
@@ -278,6 +280,7 @@ klee::ref<klee::Expr> Annotation::onDataMemoryAccess(S2EExecutionState *state,
     }
 
     uint64_t address = cast<klee::ConstantExpr>(virtualAddress)->getZExtValue();
+    uint64_t width = cast<klee::ConstantExpr>(virtualAddress)->getWidth() / 8;
     uint64_t concreteValue = 0;
 
     if (!isa<klee::ConstantExpr>(value))
@@ -301,13 +304,24 @@ klee::ref<klee::Expr> Annotation::onDataMemoryAccess(S2EExecutionState *state,
 
             lua_getfield(L, LUA_GLOBALSINDEX, itr->annotation.c_str());
 
-            lua_pushboolean(L, isIO);
-            lua_pushboolean(L, isWrite);
-            lua_pushnumber(L, concreteValue);
-            lua_pushnumber(L, address);
-            Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
             Lunar<LUAAnnotation>::push(L, &luaAnnotation);
-            lua_call(L, 6, 0);
+            Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
+            lua_pushnumber(L, address);
+            lua_pushnumber(L, width);
+            lua_pushnumber(L, concreteValue);
+            lua_pushboolean(L, isWrite);
+            lua_pushboolean(L, isIO);
+
+            lua_call(L, 7, 1);
+            uint64_t new_value = lua_tonumber(L, lua_gettop(L));
+            lua_pop(L, 1);
+
+            //TODO: What if serveral annotations exist?
+            if (new_value != concreteValue)
+            {
+    //            s2e()->getWarningsStream() << "Annotation returning value " << hexval(new_value) << " for address " << hexval(address) << '\n';
+                return klee::ref<klee::Expr>(klee::ConstantExpr::create(new_value, cast<klee::ConstantExpr>(value)->getWidth()));
+            }
             //TODO: Fire annotation
         }
     }
