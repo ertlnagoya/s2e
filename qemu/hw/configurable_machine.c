@@ -48,21 +48,30 @@
 static QDict * load_configuration(const char * filename)
 {
     int file = open(filename, O_RDONLY);
-    off_t filesize = lseek(file, 0, SEEK_END);
+    off_t filesize;
     char * filedata = NULL;
     ssize_t err;
     QObject * obj;
 
+    if (file == -1)
+    {
+        printf("ERROR: configurable_machine cannot find your machine configuration file '%s'\n", filename);
+        exit(1);
+    }
+
+    filesize = lseek(file, 0, SEEK_END);
     lseek(file, 0, SEEK_SET);
 
+    printf("Trying to allocate %ld bytes\n", filesize);
+
     filedata = g_malloc(filesize + 1);
-    memset(filedata, 0, filesize + 1);
 
     if (!filedata)
     {
-        fprintf(stderr, "Out of memory\n");
+        fprintf(stderr, "configurable_machine: Out of memory while loading configuration ...\n");
         exit(1);
     }
+    memset(filedata, 0, filesize + 1);
 
     err = read(file, filedata, filesize);
 
