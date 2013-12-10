@@ -33,8 +33,8 @@
  * All contributors are listed in the S2E-AUTHORS file.
  */
 
-#ifndef S2E_PLUGINS_EXAMPLE_H
-#define S2E_PLUGINS_EXAMPLE_H
+#ifndef S2E_INSTRUCTION_PRINTER_H
+#define S2E_INSTRUCTION_PRINTER_H
 
 #include <s2e/Plugin.h>
 #include <s2e/Plugins/CorePlugin.h>
@@ -66,4 +66,4 @@ private:
 } // namespace plugins
 } // namespace s2e
 
-#endif // S2E_PLUGINS_EXAMPLE_H
+#endif /* S2E_INSTRUCTION_PRINTER_H */
