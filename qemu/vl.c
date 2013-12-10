@@ -1851,7 +1851,12 @@ char *qemu_find_file(int type, const char *name)
     switch (type) {
     case QEMU_FILE_TYPE_LIB:
         /* XXX: Terrible hack. Redo it properly! */
+        //TODO: [J] Now even more hacky
+#if defined(TARGET_ARM) && defined(TARGET_WORDS_BIGENDIAN)
+        subdir="../armeb-s2e-softmmu/";
+#else
         subdir="../" TARGET_ARCH "-s2e-softmmu/";
+#endif
         break;
     case QEMU_FILE_TYPE_BIOS:
         subdir = "";
