@@ -192,6 +192,15 @@ public:
                  bool /* isWrite */, bool /* isIO */>
             onDataMemoryAccess;
 
+    /** Signal that is emitted on each memory access */
+    /* XXX: this signal is still not emitted for code */
+    sigc::signal<klee::ref<klee::Expr>, S2EExecutionState*,
+                 klee::ref<klee::Expr> /* virtualAddress */,
+                 klee::ref<klee::Expr> /* hostAddress */,
+                 klee::ref<klee::Expr> /* value */,
+                 bool /* isWrite */, bool /* isIO */>
+            onHijackDataMemoryAccess;
+
     /** Signal that is emitted on each port access */
     sigc::signal<void, S2EExecutionState*,
                  klee::ref<klee::Expr> /* port */,

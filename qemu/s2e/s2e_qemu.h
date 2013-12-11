@@ -147,6 +147,9 @@ void s2e_trace_memory_access(
         uint64_t vaddr, uint64_t haddr, uint8_t* buf, unsigned size,
         int isWrite, int isIO);
 
+int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr,
+        uint64_t* val, unsigned size, int isWrite, int isIO);
+
 extern unsigned g_s2e_enable_mmio_checks;
 
 /** Called on port access from helper code */
@@ -344,6 +347,9 @@ uint64_t tcg_llvm_fork_and_concretize(uint64_t value,
                                       uint64_t knownMax);
 void tcg_llvm_trace_memory_access(uint64_t vaddr, uint64_t haddr,
                                   uint64_t value, uint32_t bits,
+                                  uint8_t isWrite, uint8_t isIo);
+int tcg_llvm_hijack_memory_access(uint64_t vaddr, uint64_t haddr,
+                                  uint64_t* value, uint32_t bits,
                                   uint8_t isWrite, uint8_t isIo);
 void tcg_llvm_trace_port_access(uint64_t port, uint64_t value,
                                 unsigned bits, int isWrite);

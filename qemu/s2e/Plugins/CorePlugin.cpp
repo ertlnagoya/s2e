@@ -403,6 +403,74 @@ static void s2e_trace_memory_access_slow(
     }
 }
 
+static int s2e_hijack_memory_access_slow(
+        uint64_t vaddr, uint64_t haddr, uint64_t* value, unsigned size,
+        int isWrite, int isIO)
+{
+    if (size > sizeof(value))
+        size = sizeof(value);
+
+    klee::ref<klee::Expr> exprValue = klee::ConstantExpr::create(*value, size * 8);
+
+    try {
+        klee::ref<klee::Expr> exprResult = g_s2e->getCorePlugin()->onHijackDataMemoryAccess.emit(g_s2e_state,
+            klee::ConstantExpr::create(vaddr, 64),
+            klee::ConstantExpr::create(haddr, 64),
+            exprValue,
+            isWrite, isIO);
+
+        if (exprResult.isNull())
+        {
+            //Do nothing. HAHA!
+        }
+        else if (isa<klee::ConstantExpr>(exprResult))
+        {
+            if (cast<klee::ConstantExpr>(exprResult)->getWidth() / 8 != size)
+            {
+                g_s2e->getWarningsStream() << "Return value size of onDataMemoryAccess signal handler differs from argument" << '\n';
+                //TODO: raise error
+                return 0;
+            }
+
+            uint64_t resultValue = cast<klee::ConstantExpr>(exprResult)->getZExtValue();
+
+            if (resultValue != *value)
+                *value = resultValue;
+        }
+        else if (g_s2e_state->isRunningConcrete())
+        {
+            //If this is not the first instruction in the translation block
+            if (g_s2e_state->getPc() != g_s2e_state->getTb()->pc) {
+                g_s2e->getWarningsStream() << "Switching to symbolic mode because onDataMemoryAccess returned a symbolic "
+                        << "value in concrete mode. This most likely happened because one of your plugins wants to switch "
+                        << "to symbolic mode. The problem is that some instructions already have been executed in the current "
+                        << "translation block and will be reexecuted in symbolic mode. This is fine as long as those instructions "
+                        << "do not have any undesired side effects. Verify the translation block containing PC "
+                        << hexval(g_s2e_state->getPc()) << " does not have any side effects and switch to symbolic execution mode before "
+                        << "if it does (e.g., by placing an Annotation at the beginning of the translation block)." << '\n';
+            }
+
+
+            g_s2e->getDebugStream() << "DEBUG: onDataMemoryAccess returned symbolic value at PC "
+                    << hexval(g_s2e_state->getPc()) << " in concrete mode, switching to symbolic mode ..." << '\n';
+            g_s2e_state->jumpToSymbolicCpp();
+        }
+        else
+        {
+            //Symbolic value in symbolic mode, matches like the fist on the eye ;)
+            //TODO: [J] Don't know what to do
+        }
+
+
+
+    } catch(s2e::CpuExitException&) {
+        s2e_longjmp(env->jmp_env, 1);
+    }
+
+    //TODO: Dummy return
+    return 0;
+}
+
 /**
  * We split the function in two parts so that the common case when
  * there is no instrumentation is as fast as possible.
@@ -414,6 +482,17 @@ void s2e_trace_memory_access(
     if(unlikely(!g_s2e->getCorePlugin()->onDataMemoryAccess.empty())) {
         s2e_trace_memory_access_slow(vaddr, haddr, buf, size, isWrite, isIO);
     }
+}
+
+
+int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr, uint64_t* value, unsigned size, int isWrite, int isIO)
+{
+    if(unlikely(!g_s2e->getCorePlugin()->onHijackDataMemoryAccess.empty()))
+    {
+        return s2e_hijack_memory_access_slow(vaddr, haddr, value, size, isWrite, isIO);
+    }
+
+    return 0;
 }
 
 void s2e_on_page_fault(S2E *s2e, S2EExecutionState* state, uint64_t addr, int is_write)
