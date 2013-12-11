@@ -34,8 +34,12 @@
  */
 
 /**
+ * TODO:
  * - Currently only one memory annotation can be made per address. If there are
  *   several ranges that include an address, only the first one will be notified.
+ * - Currently returning a different value in symbolic mode has unknown effects.
+ *   I haven't yet understood from where the onDataMemoryAccess signal is emitted
+ *   (S2EExecutor::handlerTraceMemoryAccess is called directly from
  *
  * This is the configuration used for the memory annotation:
  *     Annotation = {
