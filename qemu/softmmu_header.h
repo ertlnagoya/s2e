@@ -101,6 +101,29 @@
 #define S2E_TRACE_MEMORY(vaddr, haddr, value, isWrite, isIO) \
     tcg_llvm_trace_memory_access(vaddr, haddr, \
                                  value, 8*DATA_SIZE, isWrite, isIO);
+#define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, origCode) \
+        do { \
+            uint64_t val = 0; \
+            if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
+                            &val, DATA_SIZE, 0, isIO))) { \
+                value = val; \
+            } \
+            else { \
+                origCode; \
+            } \
+        } while (0)
+
+#define S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, isIO, origCode) \
+        do { \
+            uint64_t val = value; \
+            if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
+                            &val, DATA_SIZE, 0, isIO))) { \
+            } \
+            else { \
+                origCode; \
+            } \
+        } while (0)
+
 #define S2E_FORK_AND_CONCRETIZE(val, max) \
     tcg_llvm_fork_and_concretize(val, 0, max)
 #else // S2E_LLVM_LIB
@@ -108,6 +131,30 @@
 #define S2E_TRACE_MEMORY(vaddr, haddr, value, isWrite, isIO) \
     s2e_trace_memory_access(vaddr, haddr, \
                             (uint8_t*) &value, DATA_SIZE, isWrite, isIO);
+
+#define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, origCode) \
+        do { \
+            uint64_t val = 0; \
+            if (unlikely(s2e_hijack_memory_access(vaddr, haddr, \
+                            &val, DATA_SIZE, 0, isIO))) { \
+                value = val; \
+            } \
+            else { \
+                origCode; \
+            } \
+        } while (0)
+
+#define S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, isIO, origCode) \
+        do { \
+            uint64_t val = value; \
+            if (unlikely(s2e_hijack_memory_access(vaddr, haddr, \
+                            &val, DATA_SIZE, 0, isIO))) { \
+            } \
+            else { \
+                origCode; \
+            } \
+        } while (0)
+
 #define S2E_FORK_AND_CONCRETIZE(val, max) (val)
 #endif // S2E_LLVM_LIB
 
@@ -118,6 +165,8 @@
 
 #else // CONFIG_S2E
 #define S2EINLINE inline
+#define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, code) code
+#define S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, isIO, code) code
 #define S2E_TRACE_MEMORY(...)
 #define S2E_FORK_AND_CONCRETIZE(val, max) (val)
 #define S2E_FORK_AND_CONCRETIZE_ADDR(val, max) (val)
@@ -126,6 +175,15 @@
 #define S2E_RAM_OBJECT_DIFF 0
 
 #endif // CONFIG_S2E
+
+#define S2E_HIJACK_DATA_MEMORY_READ(vaddr, haddr, value, code) \
+        S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, 0, code)
+#define S2E_HIJACK_DATA_MEMORY_WRITE(vaddr, haddr, value, code) \
+        S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, 0, code)
+#define S2E_HIJACK_IO_MEMORY_READ(vaddr, haddr, value, code) \
+        S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, 1, code)
+#define S2E_HIJACK_IO_MEMORY_WRITE(vaddr, haddr, value, code) \
+        S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, 1, code)
 
 #ifdef STATIC_TRANSLATOR
 
@@ -188,10 +246,17 @@ glue(glue(glue(CPU_PREFIX, ld), USUFFIX), MEMSUFFIX)(ENV_PARAM
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
         S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
         if(likely(_s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE)))
-            res = glue(glue(ld, USUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)));
+        {
+            S2E_HIJACK_DATA_MEMORY_READ(addr, physaddr, res,
+                    res = glue(glue(ld, USUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)))
+            );
+        }
         else
 #endif
-            res = glue(glue(ld, USUFFIX), _raw)((uint8_t *)physaddr);
+
+            S2E_HIJACK_DATA_MEMORY_READ(addr, physaddr, res,
+                    res = glue(glue(ld, USUFFIX), _raw)((uint8_t *)physaddr)
+            );
 
         //XXX: Fix this to be on the dataflow
         //res = S2E_TRACE_MEMORY(addr, physaddr, res, 0, 0);
@@ -227,10 +292,15 @@ glue(glue(glue(CPU_PREFIX, lds), SUFFIX), MEMSUFFIX)(ENV_PARAM
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
         S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
         if(likely(_s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE)))
-            res = glue(glue(lds, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)));
+            //TODO: [J] is it important for the hijacker if the access is signed?
+            S2E_HIJACK_DATA_MEMORY_READ(addr, physaddr, res,
+                res = glue(glue(lds, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)))
+            );
         else
 #endif
-            res = glue(glue(lds, SUFFIX), _raw)((uint8_t *)physaddr);
+            S2E_HIJACK_DATA_MEMORY_READ(addr, physaddr, res,
+                res = glue(glue(lds, SUFFIX), _raw)((uint8_t *)physaddr)
+            );
 
         S2E_TRACE_MEMORY(addr, physaddr, res, 0, 0);
     }
@@ -271,7 +341,10 @@ glue(glue(glue(CPU_PREFIX, st), SUFFIX), MEMSUFFIX)(ENV_PARAM target_ulong ptr,
         else
 #endif
         S2E_TRACE_MEMORY(addr, physaddr, v, 1, 0);
-        glue(glue(st, SUFFIX), _raw)((uint8_t *)physaddr, v);
+
+        S2E_HIJACK_DATA_MEMORY_WRITE(addr, physaddr, v,
+           glue(glue(st, SUFFIX), _raw)((uint8_t *)physaddr, v)
+        );
     }
 }
 
