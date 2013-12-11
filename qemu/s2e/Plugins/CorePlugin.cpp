@@ -370,6 +370,14 @@ void s2e_trace_memory_access(
     }
 }
 
+/**
+ * Called whenever memory is accessed.
+ */
+int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr, uint8_t* value, unsigned size, int isWrite, int isIO, int isCode) 
+{
+    return 0;
+}
+
 void s2e_on_page_fault(S2E *s2e, S2EExecutionState* state, uint64_t addr, int is_write)
 {
     try {
