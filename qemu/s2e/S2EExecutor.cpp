@@ -441,9 +441,9 @@ void S2EExecutor::handlerTraceMemoryAccess(Executor* executor,
         ref<Expr> result = s2eExecutor->m_s2e->getCorePlugin()->onDataMemoryAccess.emit(
                 s2eState, args[0], args[1], value, isWrite, isIO);
 
-        if (value != result)
+        if (!result.isNull() && value.compare(result) != 0)
         {
-            g_s2e->getWarningsStream() << "ERROR: The memory value has been changed by a onDataMemoryAccess handler, but writing back of this value is not yet implemented" << '\n';
+            args[2] = result;
         }
     }
 }
