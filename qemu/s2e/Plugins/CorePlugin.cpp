@@ -372,10 +372,28 @@ static void s2e_trace_memory_access_slow(
             if (resultValue != value)
                 memcpy(buf, &resultValue, copy_size);
         }
+        else if (g_s2e_state->isRunningConcrete())
+        {
+            //If this is not the first instruction in the translation block
+            if (g_s2e_state->getPc() != g_s2e_state->getTb()->pc) {
+                g_s2e->getWarningsStream() << "Switching to symbolic mode because onDataMemoryAccess returned a symbolic "
+                        << "value in concrete mode. This most likely happened because one of your plugins wants to switch "
+                        << "to symbolic mode. The problem is that some instructions already have been executed in the current "
+                        << "translation block and will be reexecuted in symbolic mode. This is fine as long as those instructions "
+                        << "do not have any undesired side effects. Verify the translation block containing PC "
+                        << hexval(g_s2e_state->getPc()) << " does not have any side effects and switch to symbolic execution mode before "
+                        << "if it does (e.g., by placing an Annotation at the beginning of the translation block)." << '\n';
+            }
+
+
+            g_s2e->getDebugStream() << "DEBUG: onDataMemoryAccess returned symbolic value at PC "
+                    << hexval(g_s2e_state->getPc()) << " in concrete mode, switching to symbolic mode ..." << '\n';
+            g_s2e_state->jumpToSymbolicCpp();
+        }
         else
         {
-            g_s2e->getDebugStream() << "DEBUG: onDataMemoryAccess returned symbolic value in concrete mode, switching to symbolic mode ..." << '\n';
-            g_s2e_state->jumpToSymbolicCpp();
+            //Symbolic value in symbolic mode, matches like the fist on the eye ;)
+            //TODO: [J] Don't know what to do
         }
 
 
