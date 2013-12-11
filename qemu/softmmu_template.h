@@ -87,12 +87,60 @@
 #define S2E_TRACE_MEMORY(vaddr, haddr, value, isWrite, isIO) \
     tcg_llvm_trace_memory_access(vaddr, haddr, \
                                  value, 8*sizeof(value), isWrite, isIO);
+
+#define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, origCode) \
+        do { \
+            uint64_t val = 0; \
+            if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
+                            &val, DATA_SIZE, 0, isIO))) { \
+                value = val; \
+            } \
+            else { \
+                origCode; \
+            } \
+        } while (0)
+
+#define S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, isIO, origCode) \
+        do { \
+            uint64_t val = value; \
+            if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
+                            &val, DATA_SIZE, 0, isIO))) { \
+            } \
+            else { \
+                origCode; \
+            } \
+        } while (0)
+
 #define S2E_FORK_AND_CONCRETIZE(val, max) \
     tcg_llvm_fork_and_concretize(val, 0, max)
 #else // S2E_LLVM_LIB
 #define S2E_TRACE_MEMORY(vaddr, haddr, value, isWrite, isIO) \
     s2e_trace_memory_access(vaddr, haddr, \
                             (uint8_t*) &value, sizeof(value), isWrite, isIO);
+
+#define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, origCode) \
+        do { \
+            uint64_t val = 0; \
+            if (unlikely(s2e_hijack_memory_access(vaddr, haddr, \
+                            &val, DATA_SIZE, 0, isIO))) { \
+                value = val; \
+            } \
+            else { \
+                origCode; \
+            } \
+        } while (0)
+
+#define S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, isIO, origCode) \
+        do { \
+            uint64_t val = value; \
+            if (unlikely(s2e_hijack_memory_access(vaddr, haddr, \
+                            &val, DATA_SIZE, 0, isIO))) { \
+            } \
+            else { \
+                origCode; \
+            } \
+        } while (0)
+
 #define S2E_FORK_AND_CONCRETIZE(val, max) (val)
 #endif // S2E_LLVM_LIB
 
@@ -105,6 +153,8 @@
 #else // CONFIG_S2E
 
 #define S2E_TRACE_MEMORY(...)
+#define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, code) code
+#define S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, isIO, code) code
 #define S2E_FORK_AND_CONCRETIZE(val, max) (val)
 #define S2E_FORK_AND_CONCRETIZE_ADDR(val, max) (val)
 
@@ -114,6 +164,15 @@
 #define S2E_RAM_OBJECT_DIFF 0
 
 #endif // CONFIG_S2E
+
+#define S2E_HIJACK_DATA_MEMORY_READ(vaddr, haddr, value, code) \
+        S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, 0, code)
+#define S2E_HIJACK_DATA_MEMORY_WRITE(vaddr, haddr, value, code) \
+        S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, 0, code)
+#define S2E_HIJACK_IO_MEMORY_READ(vaddr, haddr, value, code) \
+        S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, 1, code)
+#define S2E_HIJACK_IO_MEMORY_WRITE(vaddr, haddr, value, code) \
+        S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, 1, code)
 
 static DATA_TYPE glue(glue(slow_ld, SUFFIX), MMUSUFFIX)(target_ulong addr,
                                                         int mmu_idx,
@@ -304,7 +363,9 @@ glue(glue(glue(HELPER_PREFIX, ld), SUFFIX), MMUSUFFIX)(ENV_PARAM
             retaddr = GETPC();
 #endif
             ioaddr = env->iotlb[mmu_idx][index];
-            res = glue(glue(io_read_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, addr, retaddr);
+            S2E_HIJACK_DATA_MEMORY_READ(addr, addr + ioaddr, res,
+                    res = glue(glue(io_read_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, addr, retaddr)
+            );
 
             S2E_TRACE_MEMORY(addr, addr+ioaddr, res, 0, 1);
 
@@ -334,10 +395,14 @@ glue(glue(glue(HELPER_PREFIX, ld), SUFFIX), MMUSUFFIX)(ENV_PARAM
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
             S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
             if(likely(_s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE)))
-                res = glue(glue(ld, USUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)));
+                S2E_HIJACK_DATA_MEMORY_READ(addr, addr + addend, res,
+                        res = glue(glue(ld, USUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)))
+                );
             else
 #endif
-                res = glue(glue(ld, USUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend));
+                S2E_HIJACK_DATA_MEMORY_READ(addr, addr + addend, res,
+                        res = glue(glue(ld, USUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend))
+                );
 
             S2E_TRACE_MEMORY(addr, addr+addend, res, 0, 0);
         }
@@ -382,7 +447,9 @@ glue(glue(slow_ld, SUFFIX), MMUSUFFIX)(ENV_PARAM
             if ((addr & (DATA_SIZE - 1)) != 0)
                 goto do_unaligned_access;
             ioaddr = env->iotlb[mmu_idx][index];
-            res = glue(glue(io_read_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, addr, retaddr);
+            S2E_HIJACK_DATA_MEMORY_READ(addr, addr + ioaddr, res,
+                    res = glue(glue(io_read_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, addr, retaddr)
+            );
 
             S2E_TRACE_MEMORY(addr, addr+ioaddr, res, 0, 1);
         } else if (((addr & ~S2E_RAM_OBJECT_MASK) + DATA_SIZE - 1) >= S2E_RAM_OBJECT_SIZE) {
@@ -409,10 +476,14 @@ glue(glue(slow_ld, SUFFIX), MMUSUFFIX)(ENV_PARAM
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
             S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
             if(_s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE))
-                res = glue(glue(ld, USUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)));
+                S2E_HIJACK_DATA_MEMORY_READ(addr, addr + addend, res,
+                    res = glue(glue(ld, USUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)))
+                );
             else
 #endif
-                res = glue(glue(ld, USUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend));
+                S2E_HIJACK_DATA_MEMORY_READ(addr, addr + addend, res,
+                    res = glue(glue(ld, USUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend))
+                );
 
             S2E_TRACE_MEMORY(addr, addr+addend, res, 0, 0);
         }
@@ -581,8 +652,12 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
             retaddr = GETPC();
 #endif
             ioaddr = env->iotlb[mmu_idx][index];
+
             S2E_TRACE_MEMORY(addr, addr+ioaddr, val, 1, 1);
-            glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, val, addr, retaddr);
+
+            S2E_HIJACK_DATA_MEMORY_WRITE(addr, addr + ioaddr, val,
+                glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, val, addr, retaddr)
+            );
 
         } else if (unlikely(((addr & ~S2E_RAM_OBJECT_MASK) + DATA_SIZE - 1) >= S2E_RAM_OBJECT_SIZE)) {
 
@@ -610,11 +685,15 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
             S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
             if(likely((e->addend & 1) && _s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE)))
-                glue(glue(st, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)), val);
+                S2E_HIJACK_DATA_MEMORY_WRITE(addr, addr + addend, val,
+                    glue(glue(st, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)), val)
+                );
             else
 #endif
             {
-                glue(glue(st, SUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend), val);
+                S2E_HIJACK_DATA_MEMORY_WRITE(addr, addr + addend, val,
+                    glue(glue(st, SUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend), val)
+                );
             }
         }
     } else {
@@ -658,7 +737,10 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_PARAM
             ioaddr = env->iotlb[mmu_idx][index];
 
             S2E_TRACE_MEMORY(addr, addr+ioaddr, val, 1, 1);
-            glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, val, addr, retaddr);
+
+            S2E_HIJACK_DATA_MEMORY_WRITE(addr, addr + ioaddr, val,
+                glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, val, addr, retaddr)
+            );
         } else if (((addr & ~S2E_RAM_OBJECT_MASK) + DATA_SIZE - 1) >= S2E_RAM_OBJECT_SIZE) {
 
         do_unaligned_access:
@@ -684,10 +766,14 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_PARAM
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
             S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
             if((e->addend & 1) && _s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE))
-                glue(glue(st, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)), val);
+                S2E_HIJACK_DATA_MEMORY_WRITE(addr, addr + addend, val,
+                    glue(glue(st, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)), val)
+                );
             else
 #endif
-            glue(glue(st, SUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend), val);
+            S2E_HIJACK_DATA_MEMORY_WRITE(addr, addr + addend, val,
+                glue(glue(st, SUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend), val)
+            );
         }
     } else {
         /* the page is not in the TLB : fill it */
