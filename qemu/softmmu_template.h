@@ -92,7 +92,7 @@
         do { \
             uint64_t val = 0; \
             if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 0, isIO))) { \
+                            &val, DATA_SIZE, 0, isIO, READ_ACCESS_TYPE == 2))) { \
                 value = val; \
             } \
             else { \
@@ -104,7 +104,7 @@
         do { \
             uint64_t val = value; \
             if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 0, isIO))) { \
+                            &val, DATA_SIZE, 1, isIO, 0))) { \
             } \
             else { \
                 origCode; \
@@ -122,7 +122,7 @@
         do { \
             uint64_t val = 0; \
             if (unlikely(s2e_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 0, isIO))) { \
+                            &val, DATA_SIZE, 0, isIO, READ_ACCESS_TYPE == 2))) { \
                 value = val; \
             } \
             else { \
@@ -134,7 +134,7 @@
         do { \
             uint64_t val = value; \
             if (unlikely(s2e_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 0, isIO))) { \
+                            &val, DATA_SIZE, 1, isIO, 0))) { \
             } \
             else { \
                 origCode; \
@@ -805,3 +805,4 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_PARAM
 #undef ENV_VAR
 #undef CPU_PREFIX
 #undef HELPER_PREFIX
+#undef S2E_HIJACK_MEMORY_READ

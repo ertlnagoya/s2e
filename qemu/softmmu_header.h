@@ -105,7 +105,7 @@
         do { \
             uint64_t val = 0; \
             if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 0, isIO))) { \
+                            &val, DATA_SIZE, 0, isIO, ACCESS_TYPE == (NB_MMU_MODES + 1)))) { \
                 value = val; \
             } \
             else { \
@@ -117,7 +117,7 @@
         do { \
             uint64_t val = value; \
             if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 0, isIO))) { \
+                            &val, DATA_SIZE, 1, isIO, 0))) { \
             } \
             else { \
                 origCode; \
@@ -136,7 +136,7 @@
         do { \
             uint64_t val = 0; \
             if (unlikely(s2e_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 0, isIO))) { \
+                            &val, DATA_SIZE, 0, isIO, ACCESS_TYPE == (NB_MMU_MODES + 1)))) { \
                 value = val; \
             } \
             else { \
@@ -148,7 +148,7 @@
         do { \
             uint64_t val = value; \
             if (unlikely(s2e_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 0, isIO))) { \
+                            &val, DATA_SIZE, 1, isIO, 0))) { \
             } \
             else { \
                 origCode; \
@@ -427,3 +427,4 @@ static S2EINLINE void glue(glue(CPU_PREFIX, stfl), MEMSUFFIX)(ENV_PARAM
 #undef ENV_VAR
 #undef CPU_PREFIX
 #undef HELPER_PREFIX
+#undef S2E_HIJACK_MEMORY_READ

@@ -405,7 +405,7 @@ static void s2e_trace_memory_access_slow(
 
 static int s2e_hijack_memory_access_slow(
         uint64_t vaddr, uint64_t haddr, uint64_t* value, unsigned size,
-        int isWrite, int isIO)
+        int isWrite, int isIO, int isCode)
 {
     if (size > sizeof(value))
         size = sizeof(value);
@@ -485,11 +485,11 @@ void s2e_trace_memory_access(
 }
 
 
-int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr, uint64_t* value, unsigned size, int isWrite, int isIO)
+int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr, uint64_t* value, unsigned size, int isWrite, int isIO, int isCode)
 {
     if(unlikely(!g_s2e->getCorePlugin()->onHijackDataMemoryAccess.empty()))
     {
-        return s2e_hijack_memory_access_slow(vaddr, haddr, value, size, isWrite, isIO);
+        return s2e_hijack_memory_access_slow(vaddr, haddr, value, size, isWrite, isIO, isCode);
     }
 
     return 0;
