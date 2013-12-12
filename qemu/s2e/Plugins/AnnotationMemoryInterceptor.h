@@ -87,6 +87,7 @@ class AnnotationMemoryInterceptor : public MemoryInterceptorPlugin
 {
 public:
     AnnotationMemoryInterceptor(
+            S2E* s2e,
             uint64_t address,
             uint64_t size,
             int mask,
@@ -112,6 +113,8 @@ private:
     int m_mask;
     std::string m_readHandler;
     std::string m_writeHandler;
+    S2E* m_s2e;
+    Annotation* m_annotation;
 
     virtual ~AnnotationMemoryInterceptor() {}
 };

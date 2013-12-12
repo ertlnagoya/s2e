@@ -45,6 +45,7 @@ namespace plugins {
 
 
 /*
+ * OUTDATED
  * Example configuration:
  *      {
  *          RemoteMemory = {
@@ -231,12 +232,13 @@ void AnnotationMemoryInterceptorPlugin::initialize()
 
 
             memoryInterceptor->addInterceptorPlugin(
-                    new AnnotationMemoryInterceptor(address, size, access_type, read_handler, write_handler));
+                    new AnnotationMemoryInterceptor(s2e(), address, size, access_type, read_handler, write_handler));
         }
     }
 }
 
 AnnotationMemoryInterceptor::AnnotationMemoryInterceptor(
+            S2E* s2e,
             uint64_t address,
             uint64_t size,
             int mask,
@@ -246,9 +248,11 @@ AnnotationMemoryInterceptor::AnnotationMemoryInterceptor(
       m_size(size),
       m_mask(mask),
       m_readHandler(read_handler),
-      m_writeHandler(write_handler)
+      m_writeHandler(write_handler),
+      m_s2e(s2e)
 {
-
+    m_annotation = static_cast<Annotation *>(m_s2e->getPlugin("Annotation"));
+    assert(m_annotation);
 }
 
 klee::ref<klee::Expr> AnnotationMemoryInterceptor::read(S2EExecutionState *state,
@@ -257,8 +261,54 @@ klee::ref<klee::Expr> AnnotationMemoryInterceptor::read(S2EExecutionState *state
         unsigned size,
         bool is_io, bool is_code)
 {
-    //No handler found
-    return klee::ref<klee::Expr>();
+    lua_State *L = m_s2e->getConfig()->getState();
+    LUAAnnotation luaAnnotation(m_annotation, state);
+    S2ELUAExecutionState lua_s2e_state(state);
+
+    assert(!m_readHandler.empty() && "Read handler must be set in AnnotationMemoryInterceptor configuration when read is allowed");
+
+    lua_getfield(L, LUA_GLOBALSINDEX, m_readHandler.c_str());
+    Lunar<LUAAnnotation>::push(L, &luaAnnotation);
+    Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
+    lua_pushnumber(L, cast<klee::ConstantExpr>(virtaddr)->getZExtValue());
+    lua_pushnumber(L, size / 8);
+    lua_pushboolean(L, is_io);
+    lua_pushboolean(L, is_code);
+
+    lua_call(L, 6, 2);
+
+    int resulttype = lua_tonumber(L, lua_gettop(L));
+
+    switch (resulttype)
+    {
+    case 0: //Do not hijack memory read
+    {
+        lua_pop(L, 2);
+        return klee::ref<klee::Expr>();
+    }
+    case 1: //Concrete value passed in second return argument
+    {
+        uint64_t value =  lua_tonumber(L, lua_gettop(L) - 1);
+        lua_pop(L, 2);
+        return klee::ConstantExpr::create(value, size);
+    }
+    case 2: //Unconstrained symbolic value; name of symbolic value is in 2nd argument
+    {
+        std::string name = lua_tostring(L, lua_gettop(L) - 1);
+        lua_pop(L, 2);
+        return state->createSymbolicValue(name, size);
+    }
+    default:
+    {
+        m_s2e->getWarningsStream()
+            << "[AnnotationMemoryInterceptor] Lua annotation returned unnkown result type "
+            << resulttype
+            << '\n';
+        lua_pop(L, 2);
+        return klee::ref<klee::Expr>();
+    }
+
+    }
 }
 
 bool AnnotationMemoryInterceptor::write(S2EExecutionState *state,
@@ -267,8 +317,26 @@ bool AnnotationMemoryInterceptor::write(S2EExecutionState *state,
         klee::ref<klee::Expr> value,
         bool is_io)
 {
-    //No handler found
-    return false;
+    lua_State *L = m_s2e->getConfig()->getState();
+    LUAAnnotation luaAnnotation(m_annotation, state);
+    S2ELUAExecutionState lua_s2e_state(state);
+
+    assert(!m_writeHandler.empty() && "Write handler must be set in AnnotationMemoryInterceptor configuration when read is allowed");
+
+    lua_getfield(L, LUA_GLOBALSINDEX, m_writeHandler.c_str());
+    Lunar<LUAAnnotation>::push(L, &luaAnnotation);
+    Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
+    lua_pushnumber(L, cast<klee::ConstantExpr>(virtaddr)->getZExtValue());
+    lua_pushnumber(L, value->getWidth() / 8);
+    lua_pushnumber(L, cast<klee::ConstantExpr>(value)->getZExtValue());
+    lua_pushboolean(L, is_io);
+
+    lua_call(L, 6, 1);
+
+    bool hijack = lua_toboolean(L, lua_gettop(L));
+    lua_pop(L, 1);
+
+    return hijack;
 }
 
 
