@@ -195,7 +195,7 @@ bool Debugger::decideTracing(S2EExecutionState *state, uint64_t addr, uint64_t d
     return false;
 }
 
-klee::ref<klee::Expr> Debugger::onDataMemoryAccess(S2EExecutionState *state,
+void Debugger::onDataMemoryAccess(S2EExecutionState *state,
                                klee::ref<klee::Expr> address,
                                klee::ref<klee::Expr> hostAddress,
                                klee::ref<klee::Expr> value,
@@ -203,7 +203,7 @@ klee::ref<klee::Expr> Debugger::onDataMemoryAccess(S2EExecutionState *state,
 {
     if(!isa<klee::ConstantExpr>(address) || !isa<klee::ConstantExpr>(value)) {
         //We do not support symbolic values yet...
-        return value;
+        return;
     }
 
     uint64_t addr = cast<klee::ConstantExpr>(address)->getZExtValue(64);
@@ -211,7 +211,7 @@ klee::ref<klee::Expr> Debugger::onDataMemoryAccess(S2EExecutionState *state,
 
     if (addr < m_catchAbove) {
         //Skip uninteresting ranges
-        return value;
+        return;
     }
 
 
@@ -222,8 +222,6 @@ klee::ref<klee::Expr> Debugger::onDataMemoryAccess(S2EExecutionState *state,
                    " Value=" << hexval(val) <<
                    " IsWrite=" << isWrite << '\n';
     }
-
-    return value;
 
 }
 
