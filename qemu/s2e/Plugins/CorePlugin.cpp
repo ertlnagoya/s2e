@@ -356,7 +356,7 @@ static void s2e_trace_memory_access_slow(
         s2e_longjmp(env->jmp_env, 1);
     }
 }
-/*
+
 static int s2e_hijack_memory_access_slow(
         uint64_t vaddr, uint64_t haddr, uint64_t* value, unsigned size,
         int isWrite, int isIO, int isCode)
@@ -430,7 +430,7 @@ static int s2e_hijack_memory_access_slow(
     assert(false && "This point should not be reached, something went wrong");
     return 0;
 }
-*/
+
 /**
  * We split the function in two parts so that the common case when
  * there is no instrumentation is as fast as possible.
@@ -447,7 +447,6 @@ void s2e_trace_memory_access(
 
 int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr, uint64_t* value, unsigned size, int isWrite, int isIO, int isCode)
 {
-    /*
     if(likely(g_s2e->getCorePlugin()->onHijackMemoryRead.empty() && g_s2e->getCorePlugin()->onHijackMemoryWrite.empty()))
     {
         return 0;
@@ -456,8 +455,6 @@ int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr, uint64_t* value, un
     {
         return s2e_hijack_memory_access_slow(vaddr, haddr, value, size, isWrite, isIO, isCode);
     }
-    */
-    return 0;
 }
 
 void s2e_on_page_fault(S2E *s2e, S2EExecutionState* state, uint64_t addr, int is_write)
