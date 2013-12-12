@@ -253,10 +253,11 @@ glue(glue(glue(CPU_PREFIX, ld), USUFFIX), MEMSUFFIX)(ENV_PARAM
         }
         else
 #endif
-
+        {
             S2E_HIJACK_DATA_MEMORY_READ(addr, physaddr, res,
                     res = glue(glue(ld, USUFFIX), _raw)((uint8_t *)physaddr)
             );
+        }
 
         //XXX: Fix this to be on the dataflow
         //res = S2E_TRACE_MEMORY(addr, physaddr, res, 0, 0);
@@ -298,9 +299,11 @@ glue(glue(glue(CPU_PREFIX, lds), SUFFIX), MEMSUFFIX)(ENV_PARAM
             );
         else
 #endif
+        {
             S2E_HIJACK_DATA_MEMORY_READ(addr, physaddr, res,
                 res = glue(glue(lds, SUFFIX), _raw)((uint8_t *)physaddr)
             );
+        }
 
         S2E_TRACE_MEMORY(addr, physaddr, res, 0, 0);
     }
@@ -334,17 +337,22 @@ glue(glue(glue(CPU_PREFIX, st), SUFFIX), MEMSUFFIX)(ENV_PARAM target_ulong ptr,
     } else {
         physaddr = addr + env->tlb_table[mmu_idx][page_index].addend;
 
+        S2E_TRACE_MEMORY(addr, physaddr, v, 1, 0);
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
         S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
         if(likely((e->addend & 1) && _s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE)))
-            glue(glue(st, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)), v);
+        {
+            S2E_HIJACK_DATA_MEMORY_WRITE(addr, physaddr, v,
+                glue(glue(st, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)), v)
+            );
+        }
         else
 #endif
-        S2E_TRACE_MEMORY(addr, physaddr, v, 1, 0);
-
-        S2E_HIJACK_DATA_MEMORY_WRITE(addr, physaddr, v,
-           glue(glue(st, SUFFIX), _raw)((uint8_t *)physaddr, v)
-        );
+        {
+            S2E_HIJACK_DATA_MEMORY_WRITE(addr, physaddr, v,
+               glue(glue(st, SUFFIX), _raw)((uint8_t *)physaddr, v)
+            );
+        }
     }
 }
 

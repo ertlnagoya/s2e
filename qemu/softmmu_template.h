@@ -363,7 +363,7 @@ glue(glue(glue(HELPER_PREFIX, ld), SUFFIX), MMUSUFFIX)(ENV_PARAM
             retaddr = GETPC();
 #endif
             ioaddr = env->iotlb[mmu_idx][index];
-            S2E_HIJACK_DATA_MEMORY_READ(addr, addr + ioaddr, res,
+            S2E_HIJACK_IO_MEMORY_READ(addr, addr + ioaddr, res,
                     res = glue(glue(io_read_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, addr, retaddr)
             );
 
@@ -447,7 +447,7 @@ glue(glue(slow_ld, SUFFIX), MMUSUFFIX)(ENV_PARAM
             if ((addr & (DATA_SIZE - 1)) != 0)
                 goto do_unaligned_access;
             ioaddr = env->iotlb[mmu_idx][index];
-            S2E_HIJACK_DATA_MEMORY_READ(addr, addr + ioaddr, res,
+            S2E_HIJACK_IO_MEMORY_READ(addr, addr + ioaddr, res,
                     res = glue(glue(io_read_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, addr, retaddr)
             );
 
@@ -476,14 +476,18 @@ glue(glue(slow_ld, SUFFIX), MMUSUFFIX)(ENV_PARAM
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
             S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
             if(_s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE))
+            {
                 S2E_HIJACK_DATA_MEMORY_READ(addr, addr + addend, res,
                     res = glue(glue(ld, USUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)))
                 );
+            }
             else
 #endif
+            {
                 S2E_HIJACK_DATA_MEMORY_READ(addr, addr + addend, res,
                     res = glue(glue(ld, USUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend))
                 );
+            }
 
             S2E_TRACE_MEMORY(addr, addr+addend, res, 0, 0);
         }
@@ -655,7 +659,7 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
 
             S2E_TRACE_MEMORY(addr, addr+ioaddr, val, 1, 1);
 
-            S2E_HIJACK_DATA_MEMORY_WRITE(addr, addr + ioaddr, val,
+            S2E_HIJACK_IO_MEMORY_WRITE(addr, addr + ioaddr, val,
                 glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, val, addr, retaddr)
             );
 
@@ -668,8 +672,8 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
 #ifdef ALIGNED_ONLY
             do_unaligned_access(ENV_VAR addr, 1, mmu_idx, retaddr);
 #endif
-            glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_VAR addr, val,
-                                                   mmu_idx, retaddr);
+           glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_VAR addr, val,
+                                                                       mmu_idx, retaddr);
         } else {
             /* aligned/unaligned access in the same page */
 #ifdef ALIGNED_ONLY
@@ -685,9 +689,11 @@ void glue(glue(glue(HELPER_PREFIX, st), SUFFIX), MMUSUFFIX)(ENV_PARAM
 #if defined(CONFIG_S2E) && defined(S2E_ENABLE_S2E_TLB) && !defined(S2E_LLVM_LIB)
             S2ETLBEntry *e = &env->s2e_tlb_table[mmu_idx][object_index & (CPU_S2E_TLB_SIZE-1)];
             if(likely((e->addend & 1) && _s2e_check_concrete(e->objectState, addr & ~S2E_RAM_OBJECT_MASK, DATA_SIZE)))
+            {
                 S2E_HIJACK_DATA_MEMORY_WRITE(addr, addr + addend, val,
                     glue(glue(st, SUFFIX), _p)((uint8_t*)(addr + (e->addend&~1)), val)
                 );
+            }
             else
 #endif
             {
@@ -738,7 +744,7 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_PARAM
 
             S2E_TRACE_MEMORY(addr, addr+ioaddr, val, 1, 1);
 
-            S2E_HIJACK_DATA_MEMORY_WRITE(addr, addr + ioaddr, val,
+            S2E_HIJACK_IO_MEMORY_WRITE(addr, addr + ioaddr, val,
                 glue(glue(io_write_chk, SUFFIX), MMUSUFFIX)(ENV_VAR ioaddr, val, addr, retaddr)
             );
         } else if (((addr & ~S2E_RAM_OBJECT_MASK) + DATA_SIZE - 1) >= S2E_RAM_OBJECT_SIZE) {
@@ -771,9 +777,11 @@ static void glue(glue(slow_st, SUFFIX), MMUSUFFIX)(ENV_PARAM
                 );
             else
 #endif
-            S2E_HIJACK_DATA_MEMORY_WRITE(addr, addr + addend, val,
-                glue(glue(st, SUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend), val)
-            );
+            {
+                S2E_HIJACK_DATA_MEMORY_WRITE(addr, addr + addend, val,
+                    glue(glue(st, SUFFIX), _raw)((uint8_t *)(intptr_t)(addr+addend), val)
+                );
+            }
         }
     } else {
         /* the page is not in the TLB : fill it */
