@@ -361,6 +361,9 @@ static int s2e_hijack_memory_access_slow(
         uint64_t vaddr, uint64_t haddr, uint64_t* value, unsigned size,
         int isWrite, int isIO, int isCode)
 {
+    assert(g_s2e->getCorePlugin()->onHijackMemoryWrite.m_activeSignals <= 1);
+    assert(g_s2e->getCorePlugin()->onHijackMemoryRead.m_activeSignals <= 1);
+
     if (size > sizeof(value))
         size = sizeof(value);
 
