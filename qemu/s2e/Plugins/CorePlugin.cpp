@@ -371,9 +371,10 @@ static int s2e_hijack_memory_access_slow(
     {
         if (isWrite)
         {
-            bool hijacked = false;
+            if (g_s2e->getCorePlugin()->onHijackMemoryWrite.empty())
+                return 0;
 
-            hijacked = g_s2e->getCorePlugin()->onHijackMemoryWrite.emit(
+            bool hijacked = g_s2e->getCorePlugin()->onHijackMemoryWrite.emit(
                     g_s2e_state,
                     klee::ConstantExpr::create(vaddr, 64),
                     klee::ConstantExpr::create(haddr, 64),
@@ -384,6 +385,9 @@ static int s2e_hijack_memory_access_slow(
         }
         else
         {
+            if (g_s2e->getCorePlugin()->onHijackMemoryRead.empty())
+                return 0;
+
             klee::ref<klee::Expr> exprValue = g_s2e->getCorePlugin()->onHijackMemoryRead.emit(
                     g_s2e_state,
                     klee::ConstantExpr::create(vaddr, 64),
