@@ -241,7 +241,7 @@ private:
 
     void onInstruction(S2EExecutionState *state, uint64_t pc);
 
-    klee::ref<klee::Expr> onDataMemoryAccess(S2EExecutionState*,
+    void onDataMemoryAccess(S2EExecutionState*,
             klee::ref<klee::Expr> virtualAddress,
             klee::ref<klee::Expr> hostAddress,
             klee::ref<klee::Expr> value,

@@ -185,7 +185,7 @@ public:
 
     /** Signal that is emitted on each memory access */
     /* XXX: this signal is still not emitted for code */
-    sigc::signal<klee::ref<klee::Expr>, S2EExecutionState*,
+    sigc::signal<void, S2EExecutionState*,
                  klee::ref<klee::Expr> /* virtualAddress */,
                  klee::ref<klee::Expr> /* hostAddress */,
                  klee::ref<klee::Expr> /* value */,
@@ -200,12 +200,12 @@ public:
      * klee::ref which means that the memory access should be performed.
      */
     /* XXX: this signal is still not emitted for code */
-    sigc::signal<klee::ref<klee::Expr>, S2EExecutionState*,
-                 klee::ref<klee::Expr> /* virtualAddress */,
-                 klee::ref<klee::Expr> /* hostAddress */,
-                 unsigned /* size */,
-                 bool /* isIO */, bool /* isCode */>
-            onHijackMemoryRead;
+//    sigc::signal<klee::ref<klee::Expr>, S2EExecutionState*,
+//                 klee::ref<klee::Expr> /* virtualAddress */,
+//                 klee::ref<klee::Expr> /* hostAddress */,
+//                 unsigned /* size */,
+//                 bool /* isIO */, bool /* isCode */>
+//            onHijackMemoryRead;
 
     /**
      * Signal that is emitted on each memory write.
@@ -214,12 +214,12 @@ public:
      * write handler should not be called, or <b>false</b> to execute
      * this memory write as it is supposed to happen.
      */
-    sigc::signal<bool, S2EExecutionState*,
-                     klee::ref<klee::Expr> /* virtualAddress */,
-                     klee::ref<klee::Expr> /* hostAddress */,
-                     klee::ref<klee::Expr> /* value */,
-                     bool /* isIO */>
-                onHijackMemoryWrite;
+//    sigc::signal<bool, S2EExecutionState*,
+//                     klee::ref<klee::Expr> /* virtualAddress */,
+//                     klee::ref<klee::Expr> /* hostAddress */,
+//                     klee::ref<klee::Expr> /* value */,
+//                     bool /* isIO */>
+//                onHijackMemoryWrite;
 
     /** Signal that is emitted on each port access */
     sigc::signal<void, S2EExecutionState*,

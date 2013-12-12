@@ -343,66 +343,20 @@ static void s2e_trace_memory_access_slow(
         int isWrite, int isIO)
 {
     uint64_t value = 0;
-    unsigned copy_size = (size > sizeof(value)) ? sizeof (value) : size;
+    unsigned copy_size = (size > sizeof value) ? sizeof (value) : size;
     memcpy(&value, buf, copy_size);
-    klee::ref<klee::Expr> exprValue = klee::ConstantExpr::create(value, copy_size << 3);
 
     try {
-        klee::ref<klee::Expr> exprResult = g_s2e->getCorePlugin()->onDataMemoryAccess.emit(g_s2e_state,
+        g_s2e->getCorePlugin()->onDataMemoryAccess.emit(g_s2e_state,
             klee::ConstantExpr::create(vaddr, 64),
             klee::ConstantExpr::create(haddr, 64),
-            exprValue,
+            klee::ConstantExpr::create(value, copy_size << 3),
             isWrite, isIO);
-
-        if (exprResult.isNull())
-        {
-            //Do nothing. HAHA!
-        }
-        else if (isa<klee::ConstantExpr>(exprResult))
-        {
-            if (cast<klee::ConstantExpr>(exprResult)->getWidth() / 8 != copy_size)
-            {
-                g_s2e->getWarningsStream() << "Return value size of onDataMemoryAccess signal handler differs from argument" << '\n';
-                //TODO: raise error
-                return;
-            }
-
-            uint64_t resultValue = cast<klee::ConstantExpr>(exprResult)->getZExtValue();
-
-            if (resultValue != value)
-                memcpy(buf, &resultValue, copy_size);
-        }
-        else if (g_s2e_state->isRunningConcrete())
-        {
-            //If this is not the first instruction in the translation block
-            if (g_s2e_state->getPc() != g_s2e_state->getTb()->pc) {
-                g_s2e->getWarningsStream() << "Switching to symbolic mode because onDataMemoryAccess returned a symbolic "
-                        << "value in concrete mode. This most likely happened because one of your plugins wants to switch "
-                        << "to symbolic mode. The problem is that some instructions already have been executed in the current "
-                        << "translation block and will be reexecuted in symbolic mode. This is fine as long as those instructions "
-                        << "do not have any undesired side effects. Verify the translation block containing PC "
-                        << hexval(g_s2e_state->getPc()) << " does not have any side effects and switch to symbolic execution mode before "
-                        << "if it does (e.g., by placing an Annotation at the beginning of the translation block)." << '\n';
-            }
-
-
-            g_s2e->getDebugStream() << "DEBUG: onDataMemoryAccess returned symbolic value at PC "
-                    << hexval(g_s2e_state->getPc()) << " in concrete mode, switching to symbolic mode ..." << '\n';
-            g_s2e_state->jumpToSymbolicCpp();
-        }
-        else
-        {
-            //Symbolic value in symbolic mode, matches like the fist on the eye ;)
-            //TODO: [J] Don't know what to do
-        }
-
-
-
     } catch(s2e::CpuExitException&) {
         s2e_longjmp(env->jmp_env, 1);
     }
 }
-
+/*
 static int s2e_hijack_memory_access_slow(
         uint64_t vaddr, uint64_t haddr, uint64_t* value, unsigned size,
         int isWrite, int isIO, int isCode)
@@ -476,7 +430,7 @@ static int s2e_hijack_memory_access_slow(
     assert(false && "This point should not be reached, something went wrong");
     return 0;
 }
-
+*/
 /**
  * We split the function in two parts so that the common case when
  * there is no instrumentation is as fast as possible.
@@ -493,6 +447,7 @@ void s2e_trace_memory_access(
 
 int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr, uint64_t* value, unsigned size, int isWrite, int isIO, int isCode)
 {
+    /*
     if(likely(g_s2e->getCorePlugin()->onHijackMemoryRead.empty() && g_s2e->getCorePlugin()->onHijackMemoryWrite.empty()))
     {
         return 0;
@@ -501,6 +456,8 @@ int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr, uint64_t* value, un
     {
         return s2e_hijack_memory_access_slow(vaddr, haddr, value, size, isWrite, isIO, isCode);
     }
+    */
+    return 0;
 }
 
 void s2e_on_page_fault(S2E *s2e, S2EExecutionState* state, uint64_t addr, int is_write)

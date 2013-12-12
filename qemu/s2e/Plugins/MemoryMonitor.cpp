@@ -99,7 +99,7 @@ namespace s2e
 //      }
     }
 
-    klee::ref<klee::Expr>
+    void
     MemoryMonitor::slotMemoryAccess(S2EExecutionState *state,
         klee::ref<klee::Expr> virtaddr /* virtualAddress */,
         klee::ref<klee::Expr> hostaddr /* hostAddress */,
@@ -110,7 +110,7 @@ namespace s2e
         s2e()->getWarningsStream()
             << "[MemoryMonitor]: Address is not constant ("
             << virtaddr->getKind() << ")" << '\n';
-        return value;
+        return;
       }
       uint64_t addr = cast<klee::ConstantExpr>(virtaddr)->getZExtValue();
       uint64_t size = value->getWidth() / 8;
@@ -143,9 +143,6 @@ namespace s2e
               itr->second.signal.emit(state, addr, value, access);
           }
       }
-      
-      return value;
-
     }
 
     void

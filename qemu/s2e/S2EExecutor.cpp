@@ -438,13 +438,8 @@ void S2EExecutor::handlerTraceMemoryAccess(Executor* executor,
 
         ref<Expr> value = klee::ExtractExpr::create(args[2], 0, width);
 
-        ref<Expr> result = s2eExecutor->m_s2e->getCorePlugin()->onDataMemoryAccess.emit(
+        s2eExecutor->m_s2e->getCorePlugin()->onDataMemoryAccess.emit(
                 s2eState, args[0], args[1], value, isWrite, isIO);
-
-        if (!result.isNull() && value.compare(result) != 0)
-        {
-            args[2] = result;
-        }
     }
 }
 

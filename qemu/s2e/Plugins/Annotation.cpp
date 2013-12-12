@@ -266,7 +266,7 @@ void Annotation::onTimer()
     lua_call(L, 1, 0);
 }
 
-klee::ref<klee::Expr> Annotation::onDataMemoryAccess(S2EExecutionState *state,
+void Annotation::onDataMemoryAccess(S2EExecutionState *state,
         klee::ref<klee::Expr> virtualAddress,
         klee::ref<klee::Expr> hostAddress,
         klee::ref<klee::Expr> value,
@@ -276,7 +276,7 @@ klee::ref<klee::Expr> Annotation::onDataMemoryAccess(S2EExecutionState *state,
     if (!isa<klee::ConstantExpr>(virtualAddress))
     {
         s2e()->getWarningsStream() << "[Annotations] Cannot handle a symbolic address" << '\n';
-        return klee::ref<klee::Expr>();
+        return;
     }
 
     uint64_t address = cast<klee::ConstantExpr>(virtualAddress)->getZExtValue();
@@ -312,7 +312,10 @@ klee::ref<klee::Expr> Annotation::onDataMemoryAccess(S2EExecutionState *state,
             lua_pushboolean(L, isWrite);
             lua_pushboolean(L, isIO);
 
+            lua_call(L, 7, 0);
+            /*
             lua_call(L, 7, 2);
+
             bool is_symbolic = lua_toboolean(L, lua_gettop(L) - 1);
 
             //TODO: What if serveral annotations exist?
@@ -328,10 +331,9 @@ klee::ref<klee::Expr> Annotation::onDataMemoryAccess(S2EExecutionState *state,
                 lua_pop(L, 2);
                 return klee::ref<klee::Expr>(klee::ConstantExpr::create(new_value, value->getWidth()));
             }
+            */
         }
     }
-
-    return klee::ref<klee::Expr>();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
