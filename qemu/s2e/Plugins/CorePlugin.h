@@ -192,6 +192,35 @@ public:
                  bool /* isWrite */, bool /* isIO */, bool /* isCode */>
             onDataMemoryAccess;
 
+    /**
+     * Signal that is emitted on each memory read.
+     * Only one plugin can register to receive this signal.
+     * The plugin can choose to return a value which will
+     * be used instead of performing the memory read, or an empty
+     * klee::ref which means that the memory access should be performed.
+     */
+    /* XXX: this signal is still not emitted for code */
+    sigc::signal<klee::ref<klee::Expr>, S2EExecutionState*,
+                 klee::ref<klee::Expr> /* virtualAddress */,
+                 klee::ref<klee::Expr> /* hostAddress */,
+                 unsigned /* size */,
+                 bool /* isIO */, bool /* isCode */>
+            onHijackMemoryRead;
+
+    /**
+     * Signal that is emitted on each memory write.
+     * Only one plugin can register to receive this signal.
+     * The plugin can choose to return <b>true</b> if the original
+     * write handler should not be called, or <b>false</b> to execute
+     * this memory write as it is supposed to happen.
+     */
+    sigc::signal<bool, S2EExecutionState*,
+                     klee::ref<klee::Expr> /* virtualAddress */,
+                     klee::ref<klee::Expr> /* hostAddress */,
+                     klee::ref<klee::Expr> /* value */,
+                     bool /* isIO */>
+                onHijackMemoryWrite;
+
     /** Signal that is emitted on each port access */
     sigc::signal<void, S2EExecutionState*,
                  klee::ref<klee::Expr> /* port */,

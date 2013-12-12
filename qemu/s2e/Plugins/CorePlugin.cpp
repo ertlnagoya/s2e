@@ -357,6 +357,86 @@ static void s2e_trace_memory_access_slow(
     }
 }
 
+static int s2e_hijack_memory_access_slow(
+        uint64_t vaddr, uint64_t haddr, uint8_t* val, unsigned size,
+        int isWrite, int isIO, int isCode)
+{
+    if (size > sizeof(uint64_t))
+        size = sizeof(uint64_t);
+
+    try
+    {
+        if (isWrite)
+        {
+            bool hijacked = false;
+            uint64_t value = 0;
+
+            memcpy(&value, val, size);
+
+            hijacked = g_s2e->getCorePlugin()->onHijackMemoryWrite.emit(
+                    g_s2e_state,
+                    klee::ConstantExpr::create(vaddr, 64),
+                    klee::ConstantExpr::create(haddr, 64),
+                    klee::ConstantExpr::create(value, size * 8),
+                    isIO);
+
+            return hijacked ? 1 : 0;
+        }
+        else
+        {
+            klee::ref<klee::Expr> exprValue = g_s2e->getCorePlugin()->onHijackMemoryRead.emit(
+                    g_s2e_state,
+                    klee::ConstantExpr::create(vaddr, 64),
+                    klee::ConstantExpr::create(haddr, 64),
+                    size * 8,
+                    isIO, isCode);
+
+            if (exprValue.isNull())
+            {
+                return 0;
+            }
+            else if (isa<klee::ConstantExpr>(exprValue))
+            {
+                uint64_t value = cast<klee::ConstantExpr>(exprValue)->getZExtValue();
+                
+                //TODO: [J] Endianness?
+                memcpy(val, &value, size);
+                return 1;
+            }
+            else if (g_s2e_state->isRunningConcrete())
+            {
+                //If this is not the first instruction in the translation block
+                if (g_s2e_state->getPc() != g_s2e_state->getTb()->pc) {
+                    g_s2e->getWarningsStream() << "Switching to symbolic mode because onDataMemoryAccess returned a symbolic "
+                            << "value in concrete mode. This most likely happened because one of your plugins wants to switch "
+                            << "to symbolic mode. The problem is that some instructions already have been executed in the current "
+                            << "translation block and will be reexecuted in symbolic mode. This is fine as long as those instructions "
+                            << "do not have any undesired side effects. Verify the translation block containing PC "
+                            << hexval(g_s2e_state->getPc()) << " does not have any side effects and switch to symbolic execution mode before "
+                            << "if it does (e.g., by placing an Annotation at the beginning of the translation block)." << '\n';
+                }
+
+
+                g_s2e->getDebugStream() << "DEBUG: onDataMemoryAccess returned symbolic value at PC "
+                        << hexval(g_s2e_state->getPc()) << " in concrete mode, switching to symbolic mode ..." << '\n';
+                g_s2e_state->jumpToSymbolicCpp();
+            }
+            else
+            {
+                assert(false && "This function cannot be called when S2E is in symbolic mode. Something went wrong.");
+            }
+        }
+    }
+    catch(s2e::CpuExitException&)
+    {
+        s2e_longjmp(env->jmp_env, 1);
+    }
+
+    //Dummy return, should not be reached
+    assert(false && "This point should not be reached, something went wrong");
+    return 0;
+}
+
 /**
  * We split the function in two parts so that the common case when
  * there is no instrumentation is as fast as possible.
@@ -375,7 +455,14 @@ void s2e_trace_memory_access(
  */
 int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr, uint8_t* value, unsigned size, int isWrite, int isIO, int isCode) 
 {
-    return 0;
+    if(likely(g_s2e->getCorePlugin()->onHijackMemoryRead.empty() && g_s2e->getCorePlugin()->onHijackMemoryWrite.empty()))
+    {
+        return 0;
+    }
+    else
+    {
+        return s2e_hijack_memory_access_slow(vaddr, haddr, value, size, isWrite, isIO, isCode);
+    }
 }
 
 void s2e_on_page_fault(S2E *s2e, S2EExecutionState* state, uint64_t addr, int is_write)
