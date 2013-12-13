@@ -119,8 +119,27 @@ namespace s2e
                    (state->getPc() == addr ? EMemoryExecute : 0) |
                    (isIO ? EMemoryIO : EMemoryNotIO) | 
                    (isa<klee::ConstantExpr>(value) ? EMemoryConcrete : EMemorySymbolic);
-                   
-      s2e()->getDebugStream() << "[MemoryMonitor] Memory access at " << hexval(addr) << "[" << size << "] " << (isWrite ? "write" : "read") << '\n';
+
+      std::string str_value;
+      if (isa<klee::ConstantExpr>(value))
+      {
+          std::stringstream ss;
+          ss << "0x" << std::hex << cast<klee::ConstantExpr>(value)->getZExtValue();
+          str_value = ss.str();
+      }
+      else
+      {
+          str_value = "[symbolic]";
+      }
+
+      s2e()->getDebugStream() << "[MemoryMonitor] Memory access: "
+              << "vaddr = " << hexval(addr)
+              << ", haddr = " << hexval(cast<klee::ConstantExpr>(hostaddr)->getZExtValue())
+              << ", size = " << size
+              << (isWrite ? ", write" : ", read")
+              << (isIO ? ", io" : "")
+              << ", value = " << str_value
+              << '\n';
       //TODO: End of address range (addr + width) should be checked too, but for now we assume
       //that it will be on the same page
 //      std::vector<MemoryWatch> * watches = pageDirectory[addr

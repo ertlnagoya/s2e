@@ -358,27 +358,31 @@ static void s2e_trace_memory_access_slow(
 }
 
 static int s2e_hijack_memory_access_slow(
-        uint64_t vaddr, uint64_t haddr, uint64_t* value, unsigned size,
+        uint64_t vaddr, uint64_t haddr, uint8_t* val, unsigned size,
         int isWrite, int isIO, int isCode)
 {
     assert(g_s2e->getCorePlugin()->onHijackMemoryWrite.m_activeSignals <= 1);
     assert(g_s2e->getCorePlugin()->onHijackMemoryRead.m_activeSignals <= 1);
 
-    if (size > sizeof(value))
-        size = sizeof(value);
+    if (size > sizeof(uint64_t))
+        size = sizeof(uint64_t);
 
     try
     {
         if (isWrite)
         {
+            uint64_t value = 0;
+
             if (g_s2e->getCorePlugin()->onHijackMemoryWrite.empty())
                 return 0;
+
+            memcpy(&value, val, size);
 
             bool hijacked = g_s2e->getCorePlugin()->onHijackMemoryWrite.emit(
                     g_s2e_state,
                     klee::ConstantExpr::create(vaddr, 64),
                     klee::ConstantExpr::create(haddr, 64),
-                    klee::ConstantExpr::create(*value, size * 8),
+                    klee::ConstantExpr::create(value, size * 8),
                     isIO);
 
             return hijacked ? 1 : 0;
@@ -392,7 +396,7 @@ static int s2e_hijack_memory_access_slow(
                     g_s2e_state,
                     klee::ConstantExpr::create(vaddr, 64),
                     klee::ConstantExpr::create(haddr, 64),
-                    size,
+                    size * 8,
                     isIO, isCode);
 
             if (exprValue.isNull())
@@ -401,7 +405,10 @@ static int s2e_hijack_memory_access_slow(
             }
             else if (isa<klee::ConstantExpr>(exprValue))
             {
-                *value = cast<klee::ConstantExpr>(exprValue)->getZExtValue();
+                uint64_t value = cast<klee::ConstantExpr>(exprValue)->getZExtValue();
+
+                //TODO: [J] Endianness?
+                memcpy(val, &value, size);
                 return 1;
             }
             else if (g_s2e_state->isRunningConcrete())
@@ -452,7 +459,7 @@ void s2e_trace_memory_access(
 }
 
 
-int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr, uint64_t* value, unsigned size, int isWrite, int isIO, int isCode)
+int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr, uint8_t* value, unsigned size, int isWrite, int isIO, int isCode)
 {
     if(likely(g_s2e->getCorePlugin()->onHijackMemoryRead.empty() && g_s2e->getCorePlugin()->onHijackMemoryWrite.empty()))
     {

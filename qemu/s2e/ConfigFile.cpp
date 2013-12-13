@@ -601,6 +601,19 @@ bool S2ELUAExecutionState::writeParameterAAPCS(lua_State *L, uint32_t param, uin
     return false;
 }
 
+//TODO: [J] Function should be in a better place
+static void bswap(uint8_t* var, unsigned size)
+{
+    assert(size <= sizeof(uint64_t));
+
+    uint64_t tmp;
+    unsigned i;
+
+    memcpy(&tmp, var, size);
+    for (i = 0; i < size; i++)
+        var[i] = ((uint8_t *) &tmp)[size - 1 - i];
+}
+
 int S2ELUAExecutionState::readMemory(lua_State *L)
 {
     target_ulong address = luaL_checkint(L, 1);
@@ -611,9 +624,13 @@ int S2ELUAExecutionState::readMemory(lua_State *L)
     size = size > sizeof (ret) ? sizeof (ret) : size;
 
     m_state->readMemoryConcrete(address, &ret, size);
+#ifdef TARGET_WORDS_BIGENDIAN
+        bswap((uint8_t *)&ret, size);
+#endif
     lua_pushnumber(L, ret);        /* first result */
     return 1;
 }
+
 
 int S2ELUAExecutionState::writeMemory(lua_State *L)
 {
@@ -623,8 +640,14 @@ int S2ELUAExecutionState::writeMemory(lua_State *L)
 
     if (size > sizeof(value)) {
         g_s2e->getDebugStream() << "writeMemory: size is too big" << hexval(size);
-    } else if (!m_state->writeMemoryConcrete(address, &value, size)) {
+    } else
+     {
+#ifdef TARGET_WORDS_BIGENDIAN
+        bswap((uint8_t *)&value, size);
+#endif
+        if (!m_state->writeMemoryConcrete(address, &value, size)) {
         g_s2e->getDebugStream() << "writeMemory: Could not write to memory at address " << hexval(address);
+     }
     }
 
     return 0;

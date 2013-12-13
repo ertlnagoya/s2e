@@ -92,7 +92,7 @@
         do { \
             uint64_t val = 0; \
             if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 0, isIO, READ_ACCESS_TYPE == 2))) { \
+                            val, 8 * DATA_SIZE, 0, isIO, READ_ACCESS_TYPE == 2))) { \
                 value = val; \
             } \
             else { \
@@ -102,9 +102,8 @@
 
 #define S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, isIO, origCode) \
         do { \
-            uint64_t val = value; \
             if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 1, isIO, 0))) { \
+                            value, 8 * DATA_SIZE, 1, isIO, 0))) { \
             } \
             else { \
                 origCode; \
@@ -120,10 +119,8 @@
 
 #define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, origCode) \
         do { \
-            uint64_t val = 0; \
             if (unlikely(s2e_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 0, isIO, READ_ACCESS_TYPE == 2))) { \
-                value = val; \
+                            (uint8_t*)&value, DATA_SIZE, 0, isIO, READ_ACCESS_TYPE == 2))) { \
             } \
             else { \
                 origCode; \
@@ -132,9 +129,8 @@
 
 #define S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, isIO, origCode) \
         do { \
-            uint64_t val = value; \
             if (unlikely(s2e_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 1, isIO, 0))) { \
+                            (uint8_t*)&value, DATA_SIZE, 1, isIO, 0))) { \
             } \
             else { \
                 origCode; \

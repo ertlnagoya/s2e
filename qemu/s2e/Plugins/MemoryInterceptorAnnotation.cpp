@@ -130,80 +130,100 @@ namespace s2e
                     return;
                 }
 
-                for (std::vector<std::string>::iterator ranges_itr =
-                        ranges_keys.begin(); ranges_itr != ranges_keys.end();
-                        ranges_itr++)
+                std::string interceptor_key = getConfigKey() + ".interceptors." + *plugins_itr;
+
+                if (!cfg->hasKey(interceptor_key + ".address")
+                        || !cfg->hasKey(interceptor_key + ".size")
+                        || !cfg->hasKey(interceptor_key + ".access_type"))
                 {
-                    std::string interceptor_key = getConfigKey()
-                            + ".interceptors." + *plugins_itr + "."
-                            + *ranges_itr;
+                    s2e()->getWarningsStream()
+                            << "[MemoryInterceptorAnnotation] Error: subkey .address, .size "
+                            << "or .access_type for key " << interceptor_key
+                            << " missing!" << '\n';
+                    return;
+                }
 
-                    if (!cfg->hasKey(interceptor_key + ".address")
-                            || !cfg->hasKey(interceptor_key + ".size")
-                            || !cfg->hasKey(interceptor_key + ".access_type"))
-                    {
-                        s2e()->getWarningsStream()
-                                << "[MemoryInterceptorAnnotation] Error: subkey .address, .size "
-                                << "or .access_type for key " << interceptor_key
-                                << " missing!" << '\n';
-                        return;
-                    }
+                uint64_t address = cfg->getInt(
+                        interceptor_key + ".address");
+                uint64_t size = cfg->getInt(interceptor_key + ".size");
+                ConfigFile::string_list access_types =
+                        cfg->getStringList(interceptor_key + ".access_type",
+                                ConfigFile::string_list(), &ok);
+                if (!ok)
+                {
+                    s2e()->getWarningsStream()
+                            << "[MemoryInterceptorAnnotation] Error reading subkey "
+                            << interceptor_key
+                            << ".access_type"
+                            << '\n';
+                    return;
+                }
 
-                    uint64_t address = cfg->getInt(
-                            interceptor_key + ".address");
-                    uint64_t size = cfg->getInt(interceptor_key + ".size");
-                    const std::vector<std::string> access_types =
-                            cfg->getStringList(interceptor_key + ".access_type",
-                                    std::vector<std::string>(), &ok);
-                    int access_type = 0;
-                    for (std::vector<std::string>::const_iterator access_type_itr =
-                            access_types.begin();
-                            access_type_itr != access_types.end();
-                            access_type_itr++)
-                    {
-                        if (*access_type_itr == "read")
-                            access_type |= ACCESS_TYPE_READ;
-                        else if (*access_type_itr == "write")
-                            access_type |= ACCESS_TYPE_WRITE;
-                        else if (*access_type_itr == "execute")
-                            access_type |= ACCESS_TYPE_EXECUTE;
-                        else if (*access_type_itr == "io")
-                            access_type |= ACCESS_TYPE_IO;
-                        else if (*access_type_itr == "memory")
-                            access_type |= ACCESS_TYPE_NON_IO;
-                        else if (*access_type_itr == "concrete_value")
-                            access_type |= ACCESS_TYPE_CONCRETE_VALUE;
+                int access_type = 0;
+                for (ConfigFile::string_list::const_iterator access_type_itr =
+                        access_types.begin();
+                        access_type_itr != access_types.end();
+                        access_type_itr++)
+                {
+                    if (*access_type_itr == "read")
+                        access_type |= ACCESS_TYPE_READ;
+                    else if (*access_type_itr == "write")
+                        access_type |= ACCESS_TYPE_WRITE;
+                    else if (*access_type_itr == "execute")
+                        access_type |= ACCESS_TYPE_EXECUTE;
+                    else if (*access_type_itr == "io")
+                        access_type |= ACCESS_TYPE_IO;
+                    else if (*access_type_itr == "memory")
+                        access_type |= ACCESS_TYPE_NON_IO;
+                    else if (*access_type_itr == "concrete_value")
+                        access_type |= ACCESS_TYPE_CONCRETE_VALUE;
 //TODO: Symbolic values not yet supported
 //                else if (*access_type_itr == "symbolic_value")
 //                    access_type |= ACCESS_TYPE_SYMBOLIC_VALUE;
-                        else if (*access_type_itr == "concrete_address")
-                            access_type |= ACCESS_TYPE_CONCRETE_ADDRESS;
+                    else if (*access_type_itr == "concrete_address")
+                        access_type |= ACCESS_TYPE_CONCRETE_ADDRESS;
 //TODO: Symbolic values not yet supported
 //                else if (*access_type_itr == "symbolic_address")
 //                    access_type |= ACCESS_TYPE_SYMBOLIC_ADDRESS;
-                    }
+                }
 
-                    //Add some sane defaults while symbolic values are disabled
-                    access_type |= ACCESS_TYPE_CONCRETE_VALUE
-                            | ACCESS_TYPE_CONCRETE_ADDRESS;
-                    if (!(access_type
-                            & (ACCESS_TYPE_READ | ACCESS_TYPE_WRITE
-                                    | ACCESS_TYPE_EXECUTE)))
+                //Add some sane defaults while symbolic values are disabled
+                //User can select concrete, concrete+symbolic, symbolic for address and value, default is concrete
+                if (!(access_type & ACCESS_TYPE_SYMBOLIC_VALUE))
+                    access_type |= ACCESS_TYPE_CONCRETE_VALUE;
+                if (!(access_type & ACCESS_TYPE_SYMBOLIC_ADDRESS))
+                    access_type |= ACCESS_TYPE_CONCRETE_ADDRESS;
+
+                //If none of read, write, execute is specified, all are assumed
+                if (!(access_type
+                        & (ACCESS_TYPE_READ | ACCESS_TYPE_WRITE
+                                | ACCESS_TYPE_EXECUTE)))
+                {
+                    access_type |= ACCESS_TYPE_READ | ACCESS_TYPE_WRITE
+                            | ACCESS_TYPE_EXECUTE;
+                }
+
+                //If no IO or non-IO is specified, both are assumed
+                if (!(access_type & (ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO)))
+                {
+                    access_type |= ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO;
+                }
+
+                std::string read_handler;
+                std::string write_handler;
+
+                if (access_type & (ACCESS_TYPE_READ | ACCESS_TYPE_EXECUTE))
+                {
+                    if (!cfg->hasKey(interceptor_key + ".read_handler"))
                     {
-                        access_type |= ACCESS_TYPE_READ | ACCESS_TYPE_WRITE
-                                | ACCESS_TYPE_EXECUTE;
+                        s2e()->getWarningsStream()
+                            << "[MemoryInterceptorAnnotation] .read_handler attribute must be set in annotation "
+                            << interceptor_key
+                            << " when access type is specified as read or execute."
+                            << '\n';
+                        exit(1);
                     }
-
-                    if (!(access_type & (ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO)))
-                    {
-                        access_type |= ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO;
-                    }
-
-                    std::string read_handler;
-                    std::string write_handler;
-
-                    if ((access_type & (ACCESS_TYPE_READ | ACCESS_TYPE_EXECUTE))
-                            && !cfg->hasKey(interceptor_key + ".read_handler"))
+                    else
                     {
                         read_handler = cfg->getString(
                                 interceptor_key + ".read_handler", "", &ok);
@@ -216,11 +236,22 @@ namespace s2e
                             return;
                         }
                     }
+                }
 
-                    if ((access_type & (ACCESS_TYPE_WRITE))
-                            && !cfg->hasKey(interceptor_key + ".write_handler"))
+                if (access_type & ACCESS_TYPE_WRITE)
+                {
+                    if (!cfg->hasKey(interceptor_key + ".write_handler"))
                     {
-                        read_handler = cfg->getString(
+                        s2e()->getWarningsStream()
+                            << "[MemoryInterceptorAnnotation] .write_handler attribute must be set in annotation "
+                            << interceptor_key
+                            << " when access type is specified as write."
+                            << '\n';
+                        exit(1);
+                    }
+                    else
+                    {
+                        write_handler = cfg->getString(
                                 interceptor_key + ".write_handler", "", &ok);
                         if (!ok)
                         {
@@ -231,20 +262,20 @@ namespace s2e
                             return;
                         }
                     }
-
-                    s2e()->getDebugStream()
-                            << "[MemoryInterceptorAnnotation] Adding annotation "
-                            << "for memory range " << hexval(address) << "-"
-                            << hexval(address + size) << " with access type "
-                            << hexval(access_type) << ", read handler '"
-                            << read_handler << "', write handler '"
-                            << write_handler << "'" << '\n';
-
-                    memoryInterceptor->addInterceptorPlugin(
-                            new MemoryInterceptorAnnotationHandler(s2e(), address,
-                                    size, access_type, read_handler,
-                                    write_handler));
                 }
+
+                s2e()->getDebugStream()
+                        << "[MemoryInterceptorAnnotation] Adding annotation "
+                        << "for memory range " << hexval(address) << "-"
+                        << hexval(address + size) << " with access type "
+                        << hexval(access_type) << ", read handler '"
+                        << read_handler << "', write handler '"
+                        << write_handler << "'" << '\n';
+
+                memoryInterceptor->addInterceptorPlugin(
+                        new MemoryInterceptorAnnotationHandler(s2e(), address,
+                                size, access_type, read_handler,
+                                write_handler));
             }
         }
 
@@ -284,7 +315,7 @@ namespace s2e
 
             lua_call(L, 6, 2);
 
-            int resulttype = lua_tonumber(L, lua_gettop(L));
+            int resulttype = lua_tonumber(L, lua_gettop(L) - 1);
 
             switch (resulttype)
             {
@@ -295,13 +326,13 @@ namespace s2e
                 }
             case 1: //Concrete value passed in second return argument
                 {
-                    uint64_t value = lua_tonumber(L, lua_gettop(L) - 1);
+                    uint64_t value = lua_tonumber(L, lua_gettop(L));
                     lua_pop(L, 2);
                     return klee::ConstantExpr::create(value, size);
                 }
             case 2: //Unconstrained symbolic value; name of symbolic value is in 2nd argument
                 {
-                    std::string name = lua_tostring(L, lua_gettop(L) - 1);
+                    std::string name = lua_tostring(L, lua_gettop(L));
                     lua_pop(L, 2);
                     return state->createSymbolicValue(name, size);
                 }

@@ -103,10 +103,8 @@
                                  value, 8*DATA_SIZE, isWrite, isIO);
 #define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, origCode) \
         do { \
-            uint64_t val = 0; \
             if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 0, isIO, ACCESS_TYPE == (NB_MMU_MODES + 1)))) { \
-                value = val; \
+                            value, 8 * DATA_SIZE, 0, isIO, ACCESS_TYPE == (NB_MMU_MODES + 1)))) { \
             } \
             else { \
                 origCode; \
@@ -115,9 +113,8 @@
 
 #define S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, isIO, origCode) \
         do { \
-            uint64_t val = value; \
             if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 1, isIO, 0))) { \
+                            value, 8 * DATA_SIZE, 1, isIO, 0))) { \
             } \
             else { \
                 origCode; \
@@ -134,10 +131,8 @@
 
 #define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, origCode) \
         do { \
-            uint64_t val = 0; \
             if (unlikely(s2e_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 0, isIO, ACCESS_TYPE == (NB_MMU_MODES + 1)))) { \
-                value = val; \
+                            (uint8_t*)&value, DATA_SIZE, 0, isIO, ACCESS_TYPE == (NB_MMU_MODES + 1)))) { \
             } \
             else { \
                 origCode; \
@@ -146,9 +141,8 @@
 
 #define S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, isIO, origCode) \
         do { \
-            uint64_t val = value; \
             if (unlikely(s2e_hijack_memory_access(vaddr, haddr, \
-                            &val, DATA_SIZE, 1, isIO, 0))) { \
+                            (uint8_t*)&value, DATA_SIZE, 1, isIO, 0))) { \
             } \
             else { \
                 origCode; \
@@ -222,7 +216,7 @@ glue(glue(glue(CPU_PREFIX, ld), USUFFIX), MEMSUFFIX)(ENV_PARAM
                                                      target_ulong ptr)
 {
     target_ulong object_index, page_index;
-    RES_TYPE res;
+    RES_TYPE res = 0;
     target_ulong addr;
     uintptr_t physaddr;
     int mmu_idx;
@@ -271,7 +265,7 @@ static S2EINLINE int
 glue(glue(glue(CPU_PREFIX, lds), SUFFIX), MEMSUFFIX)(ENV_PARAM
                                                      target_ulong ptr)
 {
-    int res;
+    int res = 0;
     target_ulong object_index, page_index;
     target_ulong addr;
     uintptr_t physaddr;

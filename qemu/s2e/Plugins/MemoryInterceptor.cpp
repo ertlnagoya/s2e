@@ -110,10 +110,12 @@ klee::ref<klee::Expr> MemoryInterceptor::slotMemoryRead(S2EExecutionState *state
     if (this->m_verbose)
     {
         s2e()->getDebugStream()
-                << "[MemoryInterceptor] slotMemoryRead called with address "
-                << hexval(address)
+                << "[MemoryInterceptor] slotMemoryRead called with address = " << hexval(address)
                 << ((access_type & ACCESS_TYPE_CONCRETE_ADDRESS) ? " [concrete]" : " [symbolic]")
-                << ", access_type " << hexval(access_type)
+                << ", access_type = " << hexval(access_type)
+                << ", size = " << size
+                << ", is_io = " << is_io
+                << ", is_code = " << is_code
                 << '\n';
     }
 
@@ -171,11 +173,11 @@ bool MemoryInterceptor::slotMemoryWrite(S2EExecutionState *state,
     if (this->m_verbose)
     {
         s2e()->getDebugStream()
-                << "[MemoryInterceptor] slotMemoryWrite called with address "
-                << hexval(address)
-                << ((access_type & ACCESS_TYPE_CONCRETE_ADDRESS) ? " [concrete]" : " [symbolic]")
-                << ", access_type " << hexval(access_type)
-                << '\n';
+            << "[MemoryInterceptor] slotMemoryWrite called with address = " << hexval(address)
+            << ((access_type & ACCESS_TYPE_CONCRETE_ADDRESS) ? " [concrete]" : " [symbolic]")
+            << ", access_type = " << hexval(access_type)
+            << ", is_io = " << is_io
+            << '\n';
     }
 
     for (std::vector< MemoryInterceptorPlugin* >::iterator listener_itr = this->m_listeners.begin();
