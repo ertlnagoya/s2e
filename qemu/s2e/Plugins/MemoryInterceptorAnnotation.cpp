@@ -33,313 +33,321 @@
  * All contributors are listed in the S2E-AUTHORS file.
  */
 
-#include "AnnotationMemoryInterceptor.h"
+#include "MemoryInterceptorAnnotation.h"
 #include <s2e/S2E.h>
 #include <s2e/ConfigFile.h>
 #include <s2e/Utils.h>
 
 #include <iostream>
 
-namespace s2e {
-namespace plugins {
-
-
-/*
- * OUTDATED
- * Example configuration:
- *      {
- *          RemoteMemory = {
- *              ranges = {
- *                  range1 = {
- *                      range_start = 0x400D3000,
- *                      range_end = 0x400D4000},
- *                      access_type = {"read", "io", "memory", "concrete_address", "concrete_value", "symbolic_value"}
- *                  },
- *                  range2 = {
- *                      range_start = 0x400E000,
- *                      range_end = 0x400DF000}
- *              },
- *
- */
-
-S2E_DEFINE_PLUGIN(AnnotationMemoryInterceptorPlugin, "Plugin for lua memory interception annotations",
-        "AnnotationMemoryInterceptor", "Annotation", "MemoryInterceptor");
-
-AnnotationMemoryInterceptorPlugin::AnnotationMemoryInterceptorPlugin(S2E* s2e)
-        : Plugin(s2e),
-          m_verbose(false)
+namespace s2e
 {
-}
-
-void AnnotationMemoryInterceptorPlugin::initialize()
-{
-    ConfigFile *cfg = s2e()->getConfig();
-    bool ok;
-
-    //Check that required plugins are loaded
-    MemoryInterceptor* memoryInterceptor = static_cast<MemoryInterceptor *>(s2e()->getPlugin("MemoryInterceptor"));
-    if (!memoryInterceptor)
+    namespace plugins
     {
-        s2e()->getWarningsStream()
-                            << "[AnnotationMemoryInterceptor] Could not find 'MemoryInterceptor' plugin. Terminating."
-                            << '\n';
-        exit(1);
-    }
 
-    Annotation* annotations = static_cast<Annotation *>(s2e()->getPlugin("Annotation"));
-    if (!annotations)
-    {
-        s2e()->getWarningsStream()
-                            << "[AnnotationMemoryInterceptor] Could not find 'Annotation' plugin. Terminating."
-                            << '\n';
-        exit(1);
-    }
+        /*
+         * OUTDATED
+         * Example configuration:
+         *      {
+         *          RemoteMemory = {
+         *              ranges = {
+         *                  range1 = {
+         *                      range_start = 0x400D3000,
+         *                      range_end = 0x400D4000},
+         *                      access_type = {"read", "io", "memory", "concrete_address", "concrete_value", "symbolic_value"}
+         *                  },
+         *                  range2 = {
+         *                      range_start = 0x400E000,
+         *                      range_end = 0x400DF000}
+         *              },
+         *
+         */
 
+        S2E_DEFINE_PLUGIN(MemoryInterceptorAnnotation,
+                "Plugin for lua memory interception annotations",
+                "MemoryInterceptorAnnotation", "Annotation",
+                "MemoryInterceptor");
 
-    m_verbose =
-          cfg->getBool(getConfigKey() + ".verbose", false, &ok) ? 1 : 0;
-
-    std::vector<std::string> plugins_keys = cfg->getListKeys(getConfigKey() + ".interceptors", &ok);
-
-    if (!ok)
-    {
-        s2e()->getWarningsStream() << "[AnnotationMemoryInterceptor] Error reading subkey .interceptors" << '\n';
-        return;
-    }
-
-    for (std::vector<std::string>::iterator plugins_itr = plugins_keys.begin();
-         plugins_itr != plugins_keys.end();
-         plugins_itr++)
-    {
-        std::vector<std::string> ranges_keys = cfg->getListKeys(getConfigKey() + ".interceptors." + *plugins_itr, &ok);
-        if (!ok)
+        MemoryInterceptorAnnotation::MemoryInterceptorAnnotation(S2E* s2e) :
+                Plugin(s2e), m_verbose(false)
         {
-            s2e()->getWarningsStream()
-                    << "[AnnotationMemoryInterceptor] Error reading subkey .interceptors."
-                    << *plugins_itr
-                    << '\n';
-            return;
         }
 
-        for (std::vector<std::string>::iterator ranges_itr = ranges_keys.begin();
-             ranges_itr != ranges_keys.end();
-             ranges_itr++)
+        void
+        MemoryInterceptorAnnotation::initialize()
         {
-            std::string interceptor_key = getConfigKey() + ".interceptors." + *plugins_itr + "." + *ranges_itr;
+            ConfigFile *cfg = s2e()->getConfig();
+            bool ok;
 
-            if (!cfg->hasKey(interceptor_key + ".address") ||
-                !cfg->hasKey(interceptor_key + ".size") ||
-                !cfg->hasKey(interceptor_key + ".access_type"))
+            //Check that required plugins are loaded
+            MemoryInterceptor* memoryInterceptor =
+                    static_cast<MemoryInterceptor *>(s2e()->getPlugin(
+                            "MemoryInterceptor"));
+            if (!memoryInterceptor)
             {
                 s2e()->getWarningsStream()
-                        << "[AnnotationMemoryInterceptor] Error: subkey .address, .size "
-                        << "or .access_type for key "
-                        << interceptor_key
-                        << " missing!"
+                        << "[MemoryInterceptorAnnotation] Could not find 'MemoryInterceptor' plugin. Terminating."
+                        << '\n';
+                exit(1);
+            }
+
+            Annotation* annotations =
+                    static_cast<Annotation *>(s2e()->getPlugin("Annotation"));
+            if (!annotations)
+            {
+                s2e()->getWarningsStream()
+                        << "[MemoryInterceptorAnnotation] Could not find 'Annotation' plugin. Terminating."
+                        << '\n';
+                exit(1);
+            }
+
+            m_verbose =
+                    cfg->getBool(getConfigKey() + ".verbose", false, &ok) ?
+                            1 : 0;
+
+            std::vector<std::string> plugins_keys = cfg->getListKeys(
+                    getConfigKey() + ".interceptors", &ok);
+
+            if (!ok)
+            {
+                s2e()->getWarningsStream()
+                        << "[MemoryInterceptorAnnotation] Error reading subkey .interceptors"
                         << '\n';
                 return;
             }
 
-            uint64_t address = cfg->getInt(interceptor_key + ".address");
-            uint64_t size = cfg->getInt(interceptor_key + ".size");
-            const std::vector< std::string > access_types =
-                    cfg->getStringList(interceptor_key + ".access_type", std::vector< std::string >(), &ok);
-            int access_type = 0;
-            for (std::vector< std::string >::const_iterator access_type_itr = access_types.begin();
-                 access_type_itr != access_types.end();
-                 access_type_itr++)
+            for (std::vector<std::string>::iterator plugins_itr =
+                    plugins_keys.begin(); plugins_itr != plugins_keys.end();
+                    plugins_itr++)
             {
-                if (*access_type_itr == "read")
-                    access_type |= ACCESS_TYPE_READ;
-                else if (*access_type_itr == "write")
-                    access_type |= ACCESS_TYPE_WRITE;
-                else if (*access_type_itr == "execute")
-                    access_type |= ACCESS_TYPE_EXECUTE;
-                else if (*access_type_itr == "io")
-                    access_type |= ACCESS_TYPE_IO;
-                else if (*access_type_itr == "memory")
-                    access_type |= ACCESS_TYPE_NON_IO;
-                else if (*access_type_itr == "concrete_value")
-                    access_type |= ACCESS_TYPE_CONCRETE_VALUE;
+                std::vector<std::string> ranges_keys = cfg->getListKeys(
+                        getConfigKey() + ".interceptors." + *plugins_itr, &ok);
+                if (!ok)
+                {
+                    s2e()->getWarningsStream()
+                            << "[MemoryInterceptorAnnotation] Error reading subkey .interceptors."
+                            << *plugins_itr << '\n';
+                    return;
+                }
+
+                for (std::vector<std::string>::iterator ranges_itr =
+                        ranges_keys.begin(); ranges_itr != ranges_keys.end();
+                        ranges_itr++)
+                {
+                    std::string interceptor_key = getConfigKey()
+                            + ".interceptors." + *plugins_itr + "."
+                            + *ranges_itr;
+
+                    if (!cfg->hasKey(interceptor_key + ".address")
+                            || !cfg->hasKey(interceptor_key + ".size")
+                            || !cfg->hasKey(interceptor_key + ".access_type"))
+                    {
+                        s2e()->getWarningsStream()
+                                << "[MemoryInterceptorAnnotation] Error: subkey .address, .size "
+                                << "or .access_type for key " << interceptor_key
+                                << " missing!" << '\n';
+                        return;
+                    }
+
+                    uint64_t address = cfg->getInt(
+                            interceptor_key + ".address");
+                    uint64_t size = cfg->getInt(interceptor_key + ".size");
+                    const std::vector<std::string> access_types =
+                            cfg->getStringList(interceptor_key + ".access_type",
+                                    std::vector<std::string>(), &ok);
+                    int access_type = 0;
+                    for (std::vector<std::string>::const_iterator access_type_itr =
+                            access_types.begin();
+                            access_type_itr != access_types.end();
+                            access_type_itr++)
+                    {
+                        if (*access_type_itr == "read")
+                            access_type |= ACCESS_TYPE_READ;
+                        else if (*access_type_itr == "write")
+                            access_type |= ACCESS_TYPE_WRITE;
+                        else if (*access_type_itr == "execute")
+                            access_type |= ACCESS_TYPE_EXECUTE;
+                        else if (*access_type_itr == "io")
+                            access_type |= ACCESS_TYPE_IO;
+                        else if (*access_type_itr == "memory")
+                            access_type |= ACCESS_TYPE_NON_IO;
+                        else if (*access_type_itr == "concrete_value")
+                            access_type |= ACCESS_TYPE_CONCRETE_VALUE;
 //TODO: Symbolic values not yet supported
 //                else if (*access_type_itr == "symbolic_value")
 //                    access_type |= ACCESS_TYPE_SYMBOLIC_VALUE;
-                else if (*access_type_itr == "concrete_address")
-                    access_type |= ACCESS_TYPE_CONCRETE_ADDRESS;
+                        else if (*access_type_itr == "concrete_address")
+                            access_type |= ACCESS_TYPE_CONCRETE_ADDRESS;
 //TODO: Symbolic values not yet supported
 //                else if (*access_type_itr == "symbolic_address")
 //                    access_type |= ACCESS_TYPE_SYMBOLIC_ADDRESS;
-            }
+                    }
 
-            //Add some sane defaults while symbolic values are disabled
-            access_type |= ACCESS_TYPE_CONCRETE_VALUE
-                    | ACCESS_TYPE_CONCRETE_ADDRESS;
-            if (!(access_type & (ACCESS_TYPE_READ | ACCESS_TYPE_WRITE | ACCESS_TYPE_EXECUTE)))
-            {
-                access_type |= ACCESS_TYPE_READ | ACCESS_TYPE_WRITE | ACCESS_TYPE_EXECUTE;
-            }
+                    //Add some sane defaults while symbolic values are disabled
+                    access_type |= ACCESS_TYPE_CONCRETE_VALUE
+                            | ACCESS_TYPE_CONCRETE_ADDRESS;
+                    if (!(access_type
+                            & (ACCESS_TYPE_READ | ACCESS_TYPE_WRITE
+                                    | ACCESS_TYPE_EXECUTE)))
+                    {
+                        access_type |= ACCESS_TYPE_READ | ACCESS_TYPE_WRITE
+                                | ACCESS_TYPE_EXECUTE;
+                    }
 
-            if (!(access_type & (ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO)))
-            {
-                access_type |= ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO;
-            }
+                    if (!(access_type & (ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO)))
+                    {
+                        access_type |= ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO;
+                    }
 
-            std::string read_handler;
-            std::string write_handler;
+                    std::string read_handler;
+                    std::string write_handler;
 
+                    if ((access_type & (ACCESS_TYPE_READ | ACCESS_TYPE_EXECUTE))
+                            && !cfg->hasKey(interceptor_key + ".read_handler"))
+                    {
+                        read_handler = cfg->getString(
+                                interceptor_key + ".read_handler", "", &ok);
+                        if (!ok)
+                        {
+                            s2e()->getWarningsStream()
+                                    << "[MemoryInterceptorAnnotation] Error reading subkey "
+                                    << interceptor_key + ".read_handler"
+                                    << '\n';
+                            return;
+                        }
+                    }
 
-            if ((access_type & (ACCESS_TYPE_READ | ACCESS_TYPE_EXECUTE))
-                    &&  !cfg->hasKey(interceptor_key + ".read_handler"))
-            {
-                read_handler = cfg->getString(interceptor_key + ".read_handler", "", &ok);
-                if (!ok)
-                {
-                    s2e()->getWarningsStream()
-                            << "[AnnotationMemoryInterceptor] Error reading subkey "
-                            << interceptor_key + ".read_handler"
-                            << '\n';
-                    return;
+                    if ((access_type & (ACCESS_TYPE_WRITE))
+                            && !cfg->hasKey(interceptor_key + ".write_handler"))
+                    {
+                        read_handler = cfg->getString(
+                                interceptor_key + ".write_handler", "", &ok);
+                        if (!ok)
+                        {
+                            s2e()->getWarningsStream()
+                                    << "[MemoryInterceptorAnnotation] Error reading subkey "
+                                    << interceptor_key + ".write_handler"
+                                    << '\n';
+                            return;
+                        }
+                    }
+
+                    s2e()->getDebugStream()
+                            << "[MemoryInterceptorAnnotation] Adding annotation "
+                            << "for memory range " << hexval(address) << "-"
+                            << hexval(address + size) << " with access type "
+                            << hexval(access_type) << ", read handler '"
+                            << read_handler << "', write handler '"
+                            << write_handler << "'" << '\n';
+
+                    memoryInterceptor->addInterceptorPlugin(
+                            new MemoryInterceptorAnnotationHandler(s2e(), address,
+                                    size, access_type, read_handler,
+                                    write_handler));
                 }
             }
-
-            if ((access_type & (ACCESS_TYPE_WRITE))
-                    &&  !cfg->hasKey(interceptor_key + ".write_handler"))
-            {
-                read_handler = cfg->getString(interceptor_key + ".write_handler", "", &ok);
-                if (!ok)
-                {
-                    s2e()->getWarningsStream()
-                            << "[AnnotationMemoryInterceptor] Error reading subkey "
-                            << interceptor_key + ".write_handler"
-                            << '\n';
-                    return;
-                }
-            }
-
-            s2e()->getDebugStream()
-                    << "[AnnotationMemoryInterceptor] Adding annotation "
-                    << "for memory range "
-                    << hexval(address) << "-"
-                    << hexval(address + size)
-                    << " with access type " << hexval(access_type)
-                    << ", read handler '"
-                    << read_handler
-                    << "', write handler '"
-                    << write_handler
-                    << "'"
-                    << '\n';
-
-
-
-            memoryInterceptor->addInterceptorPlugin(
-                    new AnnotationMemoryInterceptor(s2e(), address, size, access_type, read_handler, write_handler));
         }
-    }
-}
 
-AnnotationMemoryInterceptor::AnnotationMemoryInterceptor(
-            S2E* s2e,
-            uint64_t address,
-            uint64_t size,
-            int mask,
-            std::string read_handler,
-            std::string write_handler)
-    : m_address(address),
-      m_size(size),
-      m_mask(mask),
-      m_readHandler(read_handler),
-      m_writeHandler(write_handler),
-      m_s2e(s2e)
-{
-    m_annotation = static_cast<Annotation *>(m_s2e->getPlugin("Annotation"));
-    assert(m_annotation);
-}
+        MemoryInterceptorAnnotationHandler::MemoryInterceptorAnnotationHandler(
+                S2E* s2e, uint64_t address, uint64_t size, int mask,
+                std::string read_handler, std::string write_handler) :
+                m_address(address), m_size(size), m_mask(mask), m_readHandler(
+                        read_handler), m_writeHandler(write_handler), m_s2e(s2e)
+        {
+            m_annotation = static_cast<Annotation *>(m_s2e->getPlugin(
+                    "Annotation"));
+            assert(m_annotation);
+        }
 
-klee::ref<klee::Expr> AnnotationMemoryInterceptor::read(S2EExecutionState *state,
-        klee::ref<klee::Expr> virtaddr /* virtualAddress */,
-        klee::ref<klee::Expr> hostaddr /* hostAddress */,
-        unsigned size,
-        bool is_io, bool is_code)
-{
-    lua_State *L = m_s2e->getConfig()->getState();
-    LUAAnnotation luaAnnotation(m_annotation, state);
-    S2ELUAExecutionState lua_s2e_state(state);
+        klee::ref<klee::Expr>
+        MemoryInterceptorAnnotationHandler::read(S2EExecutionState *state,
+                klee::ref<klee::Expr> virtaddr /* virtualAddress */,
+                klee::ref<klee::Expr> hostaddr /* hostAddress */, unsigned size,
+                bool is_io, bool is_code)
+        {
+            lua_State *L = m_s2e->getConfig()->getState();
+            LUAAnnotation luaAnnotation(m_annotation, state);
+            S2ELUAExecutionState lua_s2e_state(state);
 
-    assert(!m_readHandler.empty() && "Read handler must be set in AnnotationMemoryInterceptor configuration when read is allowed");
+            assert(
+                    !m_readHandler.empty()
+                            && "Read handler must be set in MemoryInterceptorAnnotation configuration when read is allowed");
 
-    lua_getfield(L, LUA_GLOBALSINDEX, m_readHandler.c_str());
-    Lunar<LUAAnnotation>::push(L, &luaAnnotation);
-    Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
-    lua_pushnumber(L, cast<klee::ConstantExpr>(virtaddr)->getZExtValue());
-    lua_pushnumber(L, size / 8);
-    lua_pushboolean(L, is_io);
-    lua_pushboolean(L, is_code);
+            lua_getfield(L, LUA_GLOBALSINDEX, m_readHandler.c_str());
+            Lunar<LUAAnnotation>::push(L, &luaAnnotation);
+            Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
+            lua_pushnumber(L,
+                    cast < klee::ConstantExpr > (virtaddr)->getZExtValue());
+            lua_pushnumber(L, size / 8);
+            lua_pushboolean(L, is_io);
+            lua_pushboolean(L, is_code);
 
-    lua_call(L, 6, 2);
+            lua_call(L, 6, 2);
 
-    int resulttype = lua_tonumber(L, lua_gettop(L));
+            int resulttype = lua_tonumber(L, lua_gettop(L));
 
-    switch (resulttype)
-    {
-    case 0: //Do not hijack memory read
-    {
-        lua_pop(L, 2);
-        return klee::ref<klee::Expr>();
-    }
-    case 1: //Concrete value passed in second return argument
-    {
-        uint64_t value =  lua_tonumber(L, lua_gettop(L) - 1);
-        lua_pop(L, 2);
-        return klee::ConstantExpr::create(value, size);
-    }
-    case 2: //Unconstrained symbolic value; name of symbolic value is in 2nd argument
-    {
-        std::string name = lua_tostring(L, lua_gettop(L) - 1);
-        lua_pop(L, 2);
-        return state->createSymbolicValue(name, size);
-    }
-    default:
-    {
-        m_s2e->getWarningsStream()
-            << "[AnnotationMemoryInterceptor] Lua annotation returned unnkown result type "
-            << resulttype
-            << '\n';
-        lua_pop(L, 2);
-        return klee::ref<klee::Expr>();
-    }
+            switch (resulttype)
+            {
+            case 0: //Do not hijack memory read
+                {
+                    lua_pop(L, 2);
+                    return klee::ref<klee::Expr>();
+                }
+            case 1: //Concrete value passed in second return argument
+                {
+                    uint64_t value = lua_tonumber(L, lua_gettop(L) - 1);
+                    lua_pop(L, 2);
+                    return klee::ConstantExpr::create(value, size);
+                }
+            case 2: //Unconstrained symbolic value; name of symbolic value is in 2nd argument
+                {
+                    std::string name = lua_tostring(L, lua_gettop(L) - 1);
+                    lua_pop(L, 2);
+                    return state->createSymbolicValue(name, size);
+                }
+            default:
+                {
+                    m_s2e->getWarningsStream()
+                            << "[MemoryInterceptorAnnotation] Lua annotation returned unnkown result type "
+                            << resulttype << '\n';
+                    lua_pop(L, 2);
+                    return klee::ref<klee::Expr>();
+                }
 
-    }
-}
+            }
+        }
 
-bool AnnotationMemoryInterceptor::write(S2EExecutionState *state,
-        klee::ref<klee::Expr> virtaddr /* virtualAddress */,
-        klee::ref<klee::Expr> hostaddr /* hostAddress */,
-        klee::ref<klee::Expr> value,
-        bool is_io)
-{
-    lua_State *L = m_s2e->getConfig()->getState();
-    LUAAnnotation luaAnnotation(m_annotation, state);
-    S2ELUAExecutionState lua_s2e_state(state);
+        bool
+        MemoryInterceptorAnnotationHandler::write(S2EExecutionState *state,
+                klee::ref<klee::Expr> virtaddr /* virtualAddress */,
+                klee::ref<klee::Expr> hostaddr /* hostAddress */,
+                klee::ref<klee::Expr> value, bool is_io)
+        {
+            lua_State *L = m_s2e->getConfig()->getState();
+            LUAAnnotation luaAnnotation(m_annotation, state);
+            S2ELUAExecutionState lua_s2e_state(state);
 
-    assert(!m_writeHandler.empty() && "Write handler must be set in AnnotationMemoryInterceptor configuration when read is allowed");
+            assert(
+                    !m_writeHandler.empty()
+                            && "Write handler must be set in MemoryInterceptorAnnotation configuration when read is allowed");
 
-    lua_getfield(L, LUA_GLOBALSINDEX, m_writeHandler.c_str());
-    Lunar<LUAAnnotation>::push(L, &luaAnnotation);
-    Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
-    lua_pushnumber(L, cast<klee::ConstantExpr>(virtaddr)->getZExtValue());
-    lua_pushnumber(L, value->getWidth() / 8);
-    lua_pushnumber(L, cast<klee::ConstantExpr>(value)->getZExtValue());
-    lua_pushboolean(L, is_io);
+            lua_getfield(L, LUA_GLOBALSINDEX, m_writeHandler.c_str());
+            Lunar<LUAAnnotation>::push(L, &luaAnnotation);
+            Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
+            lua_pushnumber(L,
+                    cast < klee::ConstantExpr > (virtaddr)->getZExtValue());
+            lua_pushnumber(L, value->getWidth() / 8);
+            lua_pushnumber(L,
+                    cast < klee::ConstantExpr > (value)->getZExtValue());
+            lua_pushboolean(L, is_io);
 
-    lua_call(L, 6, 1);
+            lua_call(L, 6, 1);
 
-    bool hijack = lua_toboolean(L, lua_gettop(L));
-    lua_pop(L, 1);
+            bool hijack = lua_toboolean(L, lua_gettop(L));
+            lua_pop(L, 1);
 
-    return hijack;
-}
+            return hijack;
+        }
 
-
-
-} // namespace plugins
+    } // namespace plugins
 } // namespace s2e
