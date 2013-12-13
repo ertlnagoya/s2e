@@ -72,21 +72,21 @@ namespace plugins {
 
 
 
-class AnnotationMemoryInterceptorPlugin : public Plugin
+class MemoryInterceptorAnnotation : public Plugin
 {
     S2E_PLUGIN
 
 public:
-    AnnotationMemoryInterceptorPlugin(S2E* s2e);
+    MemoryInterceptorAnnotation(S2E* s2e);
     virtual void initialize();
 private:
     bool m_verbose;
 };
 
-class AnnotationMemoryInterceptor : public MemoryInterceptorPlugin
+class MemoryInterceptorAnnotationHandler : public MemoryInterceptorPlugin
 {
 public:
-    AnnotationMemoryInterceptor(
+    MemoryInterceptorAnnotationHandler(
             S2E* s2e,
             uint64_t address,
             uint64_t size,
@@ -116,7 +116,7 @@ private:
     S2E* m_s2e;
     Annotation* m_annotation;
 
-    virtual ~AnnotationMemoryInterceptor() {}
+    virtual ~MemoryInterceptorAnnotationHandler() {}
 };
 
 } // namespace plugins
