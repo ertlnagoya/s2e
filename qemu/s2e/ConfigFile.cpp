@@ -601,6 +601,7 @@ bool S2ELUAExecutionState::writeParameterAAPCS(lua_State *L, uint32_t param, uin
     return false;
 }
 
+#ifdef TARGET_WORDS_BIGENDIAN
 //TODO: [J] Function should be in a better place
 static void bswap(uint8_t* var, unsigned size)
 {
@@ -613,6 +614,7 @@ static void bswap(uint8_t* var, unsigned size)
     for (i = 0; i < size; i++)
         var[i] = ((uint8_t *) &tmp)[size - 1 - i];
 }
+#endif
 
 int S2ELUAExecutionState::readMemory(lua_State *L)
 {
