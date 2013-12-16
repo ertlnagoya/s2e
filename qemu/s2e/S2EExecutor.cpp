@@ -443,6 +443,98 @@ void S2EExecutor::handlerTraceMemoryAccess(Executor* executor,
     }
 }
 
+void S2EExecutor::handlerHijackMemoryAccess(Executor* executor,
+                                     ExecutionState* state,
+                                     klee::KInstruction* target,
+                                     std::vector<klee::ref<klee::Expr> > &args)
+{
+    assert(dynamic_cast<S2EExecutor*>(executor));
+
+    S2EExecutor* s2eExecutor = static_cast<S2EExecutor*>(executor);
+    S2EExecutionState* s2eState = static_cast<S2EExecutionState*>(state);
+
+    assert(isa<klee::ConstantExpr>(args[3]) && "width is expected to be a concrete expression");
+    assert(isa<klee::ConstantExpr>(args[4]) && "is_write is expected to be a concrete expression");
+    assert(isa<klee::ConstantExpr>(args[5]) && "is_io is expected to be a concrete expression");
+    assert(isa<klee::ConstantExpr>(args[6]) && "is_code is expected to be a concrete expression");
+    assert(isa<klee::ConstantExpr>(args[7]) && args[7]->getWidth() / 8 == sizeof(void *) && "do_hijack is expected to be a concrete expression");
+
+
+
+    unsigned width = cast<klee::ConstantExpr>(args[3])->getZExtValue();
+    bool is_write = cast<klee::ConstantExpr>(args[4])->getZExtValue() != 0;
+    bool is_io = cast<klee::ConstantExpr>(args[5])->getZExtValue() != 0;
+    bool is_code = cast<klee::ConstantExpr>(args[6])->getZExtValue() != 0;
+    bool do_hijack = false;
+    klee::ref<klee::Expr> returnValue;
+
+
+
+    s2eExecutor->m_s2e->getWarningsStream() << "handlerHijackMemoryAccess called with address = " 
+            << hexval(cast<klee::ConstantExpr>(args[0])->getZExtValue())
+            << ", width = " << (width / 8) << '\n';
+
+
+    if (is_write && !g_s2e->getCorePlugin()->onHijackMemoryWrite.empty())
+    {
+        std::vector< klee::ref< klee::Expr > > valueBytes;
+        s2eState->kleeReadMemory(args[2], klee::Expr::Int64, &valueBytes, false, false, false);
+        //TODO: [J] Need to care about endianness here?
+        klee::ref< klee::Expr > value = klee::ConcatExpr::create8(
+                valueBytes[7],
+                valueBytes[6],
+                valueBytes[5],
+                valueBytes[4],
+                valueBytes[3],
+                valueBytes[2],
+                valueBytes[1],
+                valueBytes[0]);
+
+        do_hijack = g_s2e->getCorePlugin()->onHijackMemoryWrite.emit(
+                            g_s2e_state,
+                            args[0],
+                            args[1],
+                            klee::ExtractExpr::create(value, 0, width),
+                            is_io);
+
+    }
+    else if (!is_write && !g_s2e->getCorePlugin()->onHijackMemoryRead.empty())
+    {
+        klee::ref<klee::Expr> exprValue = g_s2e->getCorePlugin()->onHijackMemoryRead.emit(
+                            s2eState,
+                            args[0],
+                            args[1],
+                            width,
+                            is_io, is_code);
+
+        if (!exprValue.isNull())
+        {
+            if (exprValue->getWidth() != width)
+            {
+                g_s2e->getWarningsStream() << "S2EExecutor::handlerHijackMemoryAccess: Size of returned expression from memory injector is different from expected size. Ignoring memory injection." << '\n';
+            }
+            else
+            {
+                klee::ref< klee::Expr > value = klee::ZExtExpr::create(exprValue, klee::Expr::Int64);
+                std::vector< klee::ref< klee::Expr > > valueBytes;
+
+                //TODO: [J] Care about endianness?
+                for (int i = 0; i < 8; i++)
+                {
+                    valueBytes.push_back(klee::ExtractExpr::create(value, i * 8, klee::Expr::Int8));
+                }
+                s2eState->kleeWriteMemory(args[2], valueBytes);
+                do_hijack = true;
+
+            }
+        }
+    }
+
+    std::vector< klee::ref< klee::Expr > > doHijackData;
+    doHijackData.push_back(klee::ConstantExpr::create(do_hijack ? 1 : 0, klee::Expr::Int8));
+    s2eState->kleeWriteMemory(args[7], doHijackData);
+}
+
 void S2EExecutor::handlerTraceInstruction(klee::Executor* executor,
                                 klee::ExecutionState* state,
                                 klee::KInstruction* target,
@@ -758,6 +850,7 @@ S2EExecutor::S2EExecutor(S2E* s2e, TCGLLVMContext *tcgLLVMContext,
         __DEFINE_EXT_FUNCTION(tcg_llvm_fork_and_concretize)
         __DEFINE_EXT_FUNCTION(tcg_llvm_trace_memory_access)
         __DEFINE_EXT_FUNCTION(tcg_llvm_trace_port_access)
+        __DEFINE_EXT_FUNCTION(tcg_llvm_hijack_memory_access)
     }
 #endif
 
@@ -838,6 +931,11 @@ S2EExecutor::S2EExecutor(S2E* s2e, TCGLLVMContext *tcgLLVMContext,
         function = kmodule->module->getFunction("tcg_llvm_trace_memory_access");
         assert(function);
         addSpecialFunctionHandler(function, handlerTraceMemoryAccess);
+
+        function = kmodule->module->getFunction("tcg_llvm_hijack_memory_access");
+        assert(function);
+        addSpecialFunctionHandler(function, handlerHijackMemoryAccess);
+
 
 // TODO: Find a way to bypass i/o access (when I/O adress is symbolic) for ARM
 #ifndef TARGET_ARM

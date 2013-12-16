@@ -103,20 +103,24 @@
                                  value, 8*DATA_SIZE, isWrite, isIO);
 #define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, origCode) \
         do { \
-            if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
-                            value, 8 * DATA_SIZE, 0, isIO, ACCESS_TYPE == (NB_MMU_MODES + 1)))) { \
-            } \
-            else { \
+            uint64_t result = 0; \
+            uint8_t do_hijack = 42; \
+            value = tcg_llvm_hijack_memory_access(vaddr, haddr, \
+                            &result, 8 * DATA_SIZE, 0, isIO, ACCESS_TYPE == (NB_MMU_MODES + 1), &do_hijack); \
+            if (do_hijack) { \
+                value = result; \
+            } else { \
                 origCode; \
             } \
         } while (0)
 
 #define S2E_HIJACK_MEMORY_WRITE(vaddr, haddr, value, isIO, origCode) \
         do { \
-            if (unlikely(tcg_llvm_hijack_memory_access(vaddr, haddr, \
-                            value, 8 * DATA_SIZE, 1, isIO, 0))) { \
-            } \
-            else { \
+            uint64_t result = value; \
+            uint8_t do_hijack = 0; \
+            tcg_llvm_hijack_memory_access(vaddr, haddr, \
+                            &result, 8 * DATA_SIZE, 1, isIO, 0, &do_hijack); \
+            if (!do_hijack) { \
                 origCode; \
             } \
         } while (0)
