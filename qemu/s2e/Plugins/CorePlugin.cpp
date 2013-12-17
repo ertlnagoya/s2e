@@ -415,13 +415,25 @@ static int s2e_hijack_memory_access_slow(
             {
                 //If this is not the first instruction in the translation block
                 if (g_s2e_state->getPc() != g_s2e_state->getTb()->pc) {
-                    g_s2e->getWarningsStream() << "Switching to symbolic mode because onDataMemoryAccess returned a symbolic "
-                            << "value in concrete mode. This most likely happened because one of your plugins wants to switch "
-                            << "to symbolic mode. The problem is that some instructions already have been executed in the current "
-                            << "translation block and will be reexecuted in symbolic mode. This is fine as long as those instructions "
-                            << "do not have any undesired side effects. Verify the translation block containing PC "
-                            << hexval(g_s2e_state->getPc()) << " does not have any side effects and switch to symbolic execution mode before "
-                            << "if it does (e.g., by placing an Annotation at the beginning of the translation block)." << '\n';
+                    g_s2e->getWarningsStream()
+                            << "Switching to symbolic mode because the "
+                            << "onHijackMemoryRead signal in the CorePlugin "
+                            << "returned a symbolic value in concrete mode.\n"
+                            << "This most likely happened "
+                            << "because one of your plugins wants to switch "
+                            << "to symbolic mode. The problem is that some instructions\n"
+                            << "already have been executed in the current translation block and will "
+                            << "be reexecuted in symbolic mode. This is fine as long as\n"
+                            << "those instructions do not have any undesired side effects. Verify the "
+                            << "translation block containing PC " << hexval(g_s2e_state->getPc())
+                            << " does not have any\n"
+                            << "side effects or switch to symbolic execution mode before "
+                            << "if it does (e.g., by placing an Annotation at the beginning of the\n"
+                            << "translation block)."
+                            << "\n\tAnother side effect of emitting symbolic values while not in symbolic "
+                            << "mode is that you will have an unused value in your\n"
+                            << "list of symbolic values."
+                            << '\n';
                 }
 
 
