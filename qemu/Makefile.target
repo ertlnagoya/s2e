@@ -537,7 +537,7 @@ s2eobj-y += s2e/x64.o
 s2eobj-y += s2e/Plugins/MemoryInterceptor.o
 s2eobj-y += s2e/Plugins/MemoryInterceptorAnnotation.o
 s2eobj-y += s2e/Plugins/ArbitraryExecChecker.o
-#s2eobj-y += s2e/Plugins/RemoteMemory.o
+s2eobj-y += s2e/Plugins/RemoteMemory.o
 
 s2eobj-y += s2e/Plugins/InstructionPrinter.o
 s2eobj-y += s2e/Plugins/MemInjector2.o
