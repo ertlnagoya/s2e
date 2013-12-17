@@ -31,6 +31,8 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include <iomanip>
 
+#define ENDLINE ' '
+
 /*  
 
 TODO:
@@ -61,7 +63,9 @@ void Writer::Write_i(const ElementTypeT& element, std::ostream& ostr)
 {
    Writer writer(ostr);
    writer.Write_i(element);
+   ostr << std::endl;
    ostr.flush(); // all done
+   
 }
 
 inline void Writer::Write_i(const Array& array)
@@ -70,7 +74,7 @@ inline void Writer::Write_i(const Array& array)
       m_ostr << "[]";
    else
    {
-      m_ostr << '[' << std::endl;
+      m_ostr << '[' << ENDLINE;
       ++m_nTabDepth;
 
       Array::const_iterator it(array.Begin()),
@@ -82,7 +86,7 @@ inline void Writer::Write_i(const Array& array)
 
          if (++it != itEnd)
             m_ostr << ',';
-         m_ostr << std::endl;
+         m_ostr << ENDLINE;
       }
 
       --m_nTabDepth;
@@ -96,7 +100,7 @@ inline void Writer::Write_i(const Object& object)
       m_ostr << "{}";
    else
    {
-      m_ostr << '{' << std::endl;
+      m_ostr << '{' << ENDLINE;
       ++m_nTabDepth;
 
       Object::const_iterator it(object.Begin()),
@@ -111,7 +115,7 @@ inline void Writer::Write_i(const Object& object)
 
          if (++it != itEnd)
             m_ostr << ',';
-         m_ostr << std::endl;
+         m_ostr << ENDLINE;
       }
 
       --m_nTabDepth;
