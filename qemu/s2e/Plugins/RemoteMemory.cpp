@@ -458,7 +458,7 @@ klee::ref<klee::Expr> RemoteMemoryListener::read(S2EExecutionState *state,
         return klee::ref<klee::Expr>();
     }
 
-    uint64_t value = m_remoteMemoryIf->readMemory(state, cast<klee::ConstantExpr>(virtaddr)->getZExtValue(), size);
+    uint64_t value = m_remoteMemoryIf->readMemory(state, cast<klee::ConstantExpr>(virtaddr)->getZExtValue(), size / 8);
     return klee::ConstantExpr::create(value, size);
 }
 
