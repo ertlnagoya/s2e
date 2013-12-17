@@ -450,7 +450,7 @@ void S2EExecutor::handlerHijackMemoryAccess(Executor* executor,
 {
     assert(dynamic_cast<S2EExecutor*>(executor));
 
-    S2EExecutor* s2eExecutor = static_cast<S2EExecutor*>(executor);
+//    S2EExecutor* s2eExecutor = static_cast<S2EExecutor*>(executor);
     S2EExecutionState* s2eState = static_cast<S2EExecutionState*>(state);
 
     assert(isa<klee::ConstantExpr>(args[3]) && "width is expected to be a concrete expression");
@@ -470,9 +470,9 @@ void S2EExecutor::handlerHijackMemoryAccess(Executor* executor,
 
 
 
-    s2eExecutor->m_s2e->getWarningsStream() << "handlerHijackMemoryAccess called with address = " 
-            << hexval(cast<klee::ConstantExpr>(args[0])->getZExtValue())
-            << ", width = " << (width / 8) << '\n';
+//    s2eExecutor->m_s2e->getWarningsStream() << "handlerHijackMemoryAccess called with address = "
+//            << hexval(cast<klee::ConstantExpr>(args[0])->getZExtValue())
+//            << ", width = " << (width / 8) << '\n';
 
 
     if (is_write && !g_s2e->getCorePlugin()->onHijackMemoryWrite.empty())
