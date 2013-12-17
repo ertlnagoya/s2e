@@ -85,6 +85,9 @@ void RemoteMemory::initialize()
               itr != keys.end();
               itr++)
          {
+             int mask = ACCESS_TYPE_CONCRETE_VALUE | ACCESS_TYPE_SYMBOLIC_VALUE
+                     | ACCESS_TYPE_CONCRETE_ADDRESS | ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO;
+
              if (!cfg->hasKey(getConfigKey() + ".ranges." + *itr + ".address") || 
                  !cfg->hasKey(getConfigKey() + ".ranges." + *itr + ".size")) 
              {
@@ -92,6 +95,32 @@ void RemoteMemory::initialize()
              }
              else
              {
+                 if (cfg->hasKey(getConfigKey() + ".ranges." + *itr + ".access"))
+                 {
+                     ConfigFile::string_list access_words = cfg->getStringList(
+                             getConfigKey() + ".ranges." + *itr + ".access",
+                             ConfigFile::string_list(),
+                             &ok);
+                     if (ok)
+                     {
+                         for(ConfigFile::string_list::const_iterator access_word = access_words.begin();
+                             access_word != access_words.end();
+                             access_word++)
+                         {
+                             if (*access_word == "read")
+                                 mask |= ACCESS_TYPE_READ;
+                             else if (*access_word == "write")
+                                 mask |= ACCESS_TYPE_WRITE;
+                             else if (*access_word == "execute")
+                                 mask |= ACCESS_TYPE_EXECUTE;
+                         }
+                     }
+                 }
+                 else
+                 {
+                     mask |= ACCESS_TYPE_READ | ACCESS_TYPE_WRITE | ACCESS_TYPE_EXECUTE;
+                 }
+
                  uint64_t address = cfg->getInt(getConfigKey() + ".ranges." + *itr + ".address");
                  uint64_t size = cfg->getInt(getConfigKey() + ".ranges." + *itr + ".size");
                  int mask = ACCESS_TYPE_READ | ACCESS_TYPE_WRITE | ACCESS_TYPE_EXECUTE | ACCESS_TYPE_CONCRETE_VALUE | ACCESS_TYPE_SYMBOLIC_VALUE 
