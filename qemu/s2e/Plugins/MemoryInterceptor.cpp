@@ -62,7 +62,7 @@ namespace plugins {
  */
 
 S2E_DEFINE_PLUGIN(MemoryInterceptor, "Plugin to coordinate which other plugins can intercept which memory ranges",
-        "MemoryInterceptor", "Annotation");
+        "MemoryInterceptor");
 
 MemoryInterceptor::MemoryInterceptor(S2E* s2e)
     : Plugin(s2e),
