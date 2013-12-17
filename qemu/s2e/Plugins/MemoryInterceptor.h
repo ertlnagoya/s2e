@@ -55,12 +55,32 @@ enum AccessType
     ACCESS_TYPE_IO = 0x100
 };
 
-class MemoryInterceptorPlugin
+class MemoryInterceptorListener
 {
 public:
-    virtual uint64_t getAddress() = 0;
-    virtual uint64_t getSize() = 0;
-    virtual int getAccessMask() = 0;
+    MemoryInterceptorListener(S2E* s2e, uint64_t address, uint64_t size, uint64_t mask)
+        : m_s2e(s2e),
+          m_address(address),
+          m_size(size),
+          m_mask(mask)
+    {
+    }
+
+    virtual uint64_t getAddress() 
+    {
+        return m_address;
+    }
+
+    virtual uint64_t getSize() 
+    {
+        return m_size;
+    }
+
+    virtual int getAccessMask() 
+    {
+        return m_mask;
+    }
+
     virtual klee::ref<klee::Expr> read(S2EExecutionState *state,
             klee::ref<klee::Expr> virtaddr,
             klee::ref<klee::Expr> hostaddr,
@@ -78,8 +98,12 @@ public:
     {
         return false;
     }
-    virtual ~MemoryInterceptorPlugin() {}
-private:
+    virtual ~MemoryInterceptorListener() {}
+protected:
+    S2E* m_s2e;
+    uint64_t m_address;
+    uint64_t m_size;
+    uint64_t m_mask;
 };
 
 class MemoryInterceptor : public Plugin
@@ -99,13 +123,13 @@ public:
             klee::ref<klee::Expr> value,
             bool isIO);
     void initialize();
-    void addInterceptorPlugin(MemoryInterceptorPlugin * listener);
+    void addInterceptor(MemoryInterceptorListener * listener);
 //    void registerInterceptors();
 
 private:
     bool m_readInterceptorRegistered;
     bool m_writeInterceptorRegistered;
-    std::vector< MemoryInterceptorPlugin* > m_listeners;
+    std::vector< MemoryInterceptorListener* > m_listeners;
     bool m_verbose;
 
 };

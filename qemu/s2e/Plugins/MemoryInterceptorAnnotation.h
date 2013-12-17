@@ -45,33 +45,6 @@
 namespace s2e {
 namespace plugins {
 
-    /*
-    class MemoryInterceptorConfiguration
-    {
-    public:
-        MemoryInterceptorConfiguration(
-                uint64_t address,
-                uint64_t size,
-                int access_type,
-                MemoryInterceptorType type,
-                std::string annotation)
-            : address(address),
-              size(size),
-              access_type(access_type),
-              type(type),
-              plugin_annotation(annotation) {}
-
-        uint64_t address;
-        uint64_t size;
-        int access_type;
-        MemoryInterceptorType type;
-        std::string plugin_annotation;
-    };
-    */
-
-
-
-
 class MemoryInterceptorAnnotation : public Plugin
 {
     S2E_PLUGIN
@@ -83,7 +56,7 @@ private:
     bool m_verbose;
 };
 
-class MemoryInterceptorAnnotationHandler : public MemoryInterceptorPlugin
+class MemoryInterceptorAnnotationHandler : public MemoryInterceptorListener
 {
 public:
     MemoryInterceptorAnnotationHandler(
@@ -94,9 +67,6 @@ public:
             std::string read_handler,
             std::string write_handler);
 
-    virtual uint64_t getAddress() {return m_address;}
-    virtual uint64_t getSize() {return m_size;}
-    virtual int getAccessMask() {return m_mask;}
     virtual klee::ref<klee::Expr> read(S2EExecutionState *state,
             klee::ref<klee::Expr> virtaddr,
             klee::ref<klee::Expr> hostaddr,
@@ -108,12 +78,8 @@ public:
                 klee::ref<klee::Expr> value,
                 bool isIO);
 private:
-    uint64_t m_address;
-    uint64_t m_size;
-    int m_mask;
     std::string m_readHandler;
     std::string m_writeHandler;
-    S2E* m_s2e;
     Annotation* m_annotation;
 
     virtual ~MemoryInterceptorAnnotationHandler() {}

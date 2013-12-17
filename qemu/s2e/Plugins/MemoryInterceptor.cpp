@@ -119,7 +119,7 @@ klee::ref<klee::Expr> MemoryInterceptor::slotMemoryRead(S2EExecutionState *state
                 << '\n';
     }
 
-    for (std::vector< MemoryInterceptorPlugin* >::iterator listener_itr = this->m_listeners.begin();
+    for (std::vector< MemoryInterceptorListener* >::iterator listener_itr = this->m_listeners.begin();
          listener_itr != this->m_listeners.end();
          listener_itr++)
     {
@@ -180,7 +180,7 @@ bool MemoryInterceptor::slotMemoryWrite(S2EExecutionState *state,
             << '\n';
     }
 
-    for (std::vector< MemoryInterceptorPlugin* >::iterator listener_itr = this->m_listeners.begin();
+    for (std::vector< MemoryInterceptorListener* >::iterator listener_itr = this->m_listeners.begin();
          listener_itr != this->m_listeners.end();
          listener_itr++)
     {
@@ -202,7 +202,7 @@ bool MemoryInterceptor::slotMemoryWrite(S2EExecutionState *state,
     return false;
 }
 
-void MemoryInterceptor::addInterceptorPlugin(MemoryInterceptorPlugin * listener)
+void MemoryInterceptor::addInterceptor(MemoryInterceptorListener * listener)
 {
     //TODO: Check that there is no intersection with an already added plugin
     m_listeners.push_back(listener);

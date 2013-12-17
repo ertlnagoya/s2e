@@ -272,7 +272,7 @@ namespace s2e
                         << read_handler << "', write handler '"
                         << write_handler << "'" << '\n';
 
-                memoryInterceptor->addInterceptorPlugin(
+                memoryInterceptor->addInterceptor(
                         new MemoryInterceptorAnnotationHandler(s2e(), address,
                                 size, access_type, read_handler,
                                 write_handler));
@@ -281,9 +281,10 @@ namespace s2e
 
         MemoryInterceptorAnnotationHandler::MemoryInterceptorAnnotationHandler(
                 S2E* s2e, uint64_t address, uint64_t size, int mask,
-                std::string read_handler, std::string write_handler) :
-                m_address(address), m_size(size), m_mask(mask), m_readHandler(
-                        read_handler), m_writeHandler(write_handler), m_s2e(s2e)
+                std::string read_handler, std::string write_handler) 
+            : MemoryInterceptorListener(s2e, address, size, mask),
+              m_readHandler(read_handler), 
+              m_writeHandler(write_handler)
         {
             m_annotation = static_cast<Annotation *>(m_s2e->getPlugin(
                     "Annotation"));
@@ -332,9 +333,39 @@ namespace s2e
                 }
             case 2: //Unconstrained symbolic value; name of symbolic value is in 2nd argument
                 {
-                    std::string name = lua_tostring(L, lua_gettop(L));
-                    lua_pop(L, 2);
-                    return state->createSymbolicValue(name, size);
+                    //Check already here if state is concrete to avoid creating unused symbolic values
+                    if (state->isRunningConcrete())
+                    {
+                        if (state->getPc() != state->getTb()->pc) {
+                            m_s2e->getWarningsStream() << "Switching to symbolic mode because a "
+                                    << "MemoryInterceptorAnnotation lua read annotation "
+                                    << "returned a symbolic value in concrete mode.\n"
+                                    << "This most likely happened "
+                                    << "because one of your plugins wants to switch "
+                                    << "to symbolic mode. The problem is that some instructions\n"
+                                    << "already have been executed in the current translation block and will "
+                                    << "be reexecuted in symbolic mode. This is fine as long as\n"
+                                    << "those instructions do not have any undesired side effects. Verify the "
+                                    << "translation block containing PC " << hexval(state->getPc())
+                                    << " does not have any\n"
+                                    << "side effects or switch to symbolic execution mode before "
+                                    << "if it does (e.g., by placing an Annotation at the beginning of the\n"
+                                    << "translation block)."
+                                    << '\n';
+                        }
+
+
+                        g_s2e->getDebugStream() << "[MemoryInterceptorAnnotation] read annotation returned symbolic "
+                                << "value in concrete mode at PC " << hexval(state->getPc())
+                                << ", switching to symbolic mode" << '\n';
+                        state->jumpToSymbolicCpp();
+                    }
+                    else
+                    {
+                        std::string name = lua_tostring(L, lua_gettop(L));
+                        lua_pop(L, 2);
+                        return state->createSymbolicValue(name, size);
+                    }
                 }
             default:
                 {
