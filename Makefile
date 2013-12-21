@@ -234,7 +234,7 @@ QEMU_S2E_ARCH =
 QEMU_S2E_ARCH += i386-s2e-softmmu i386-softmmu
 QEMU_S2E_ARCH += x86_64-s2e-softmmu x86_64-softmmu
 QEMU_S2E_ARCH += arm-s2e-softmmu arm-softmmu
-QEMU_S2E_ARCH += armeb-softmmu
+QEMU_S2E_ARCH += armeb-softmmu armeb-s2e-softmmu
 
 empty :=
 comma := ,
