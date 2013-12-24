@@ -73,10 +73,7 @@ public:
     // store method table in globals so that
     // scripts can add functions written in Lua.
     lua_pushvalue(L, methods);
-    lua_pushglobaltable(L);
-    int globalTableIndex = lua_tointeger(L, lua_gettop(L));
-    lua_pop(L, 1);
-    set(L, globalTableIndex, T::className);
+    lua_setglobal(L, T::className);
 
     // hide metatable from Lua getmetatable()
     lua_pushvalue(L, methods);
