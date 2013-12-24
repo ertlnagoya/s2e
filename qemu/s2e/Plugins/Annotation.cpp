@@ -250,7 +250,10 @@ void Annotation::onStateKill(S2EExecutionState* state)
     LUAAnnotation luaAnnotation(this, state);
     S2ELUAExecutionState lua_s2e_state(state);
 
-    lua_getfield(L, LUA_GLOBALSINDEX, m_onStateKill.c_str());
+    lua_pushglobaltable(L);
+    int globalTableIndex = lua_tointeger(L, lua_gettop(L));
+    lua_pop(L, 1);
+    lua_getfield(L, globalTableIndex, m_onStateKill.c_str());
     Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
     Lunar<LUAAnnotation>::push(L, &luaAnnotation);
     lua_call(L, 2, 0);
@@ -261,7 +264,10 @@ void Annotation::onTimer()
     lua_State *L = s2e()->getConfig()->getState();
     LUAAnnotation luaAnnotation(this, NULL);
 
-    lua_getfield(L, LUA_GLOBALSINDEX, m_onTimer.c_str());
+    lua_pushglobaltable(L);
+	int globalTableIndex = lua_tointeger(L, lua_gettop(L));
+	lua_pop(L, 1);
+    lua_getfield(L, globalTableIndex, m_onTimer.c_str());
     Lunar<LUAAnnotation>::push(L, &luaAnnotation);
     lua_call(L, 1, 0);
 }
@@ -302,7 +308,10 @@ void Annotation::onDataMemoryAccess(S2EExecutionState *state,
             LUAAnnotation luaAnnotation(this, state);
             S2ELUAExecutionState lua_s2e_state(state);
 
-            lua_getfield(L, LUA_GLOBALSINDEX, itr->annotation.c_str());
+            lua_pushglobaltable(L);
+			int globalTableIndex = lua_tointeger(L, lua_gettop(L));
+			lua_pop(L, 1);
+            lua_getfield(L, globalTableIndex, itr->annotation.c_str());
 
             Lunar<LUAAnnotation>::push(L, &luaAnnotation);
             Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
@@ -507,7 +516,10 @@ void Annotation::invokeAnnotation(
     luaAnnotation.m_isReturn = !isCall;
     luaAnnotation.m_isInstruction = isInstruction;
 
-    lua_getfield(L, LUA_GLOBALSINDEX, entry->annotation.c_str());
+    lua_pushglobaltable(L);
+	int globalTableIndex = lua_tointeger(L, lua_gettop(L));
+	lua_pop(L, 1);
+    lua_getfield(L, globalTableIndex, entry->annotation.c_str());
     Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
     Lunar<LUAAnnotation>::push(L, &luaAnnotation);
     lua_call(L, 2, 0);

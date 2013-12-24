@@ -305,7 +305,10 @@ namespace s2e
                     !m_readHandler.empty()
                             && "Read handler must be set in MemoryInterceptorAnnotation configuration when read is allowed");
 
-            lua_getfield(L, LUA_GLOBALSINDEX, m_readHandler.c_str());
+            lua_pushglobaltable(L);
+			int globalTableIndex = lua_tointeger(L, lua_gettop(L));
+			lua_pop(L, 1);
+            lua_getfield(L, globalTableIndex, m_readHandler.c_str());
             Lunar<LUAAnnotation>::push(L, &luaAnnotation);
             Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
             lua_pushnumber(L,
@@ -393,7 +396,10 @@ namespace s2e
                     !m_writeHandler.empty()
                             && "Write handler must be set in MemoryInterceptorAnnotation configuration when read is allowed");
 
-            lua_getfield(L, LUA_GLOBALSINDEX, m_writeHandler.c_str());
+            lua_pushglobaltable(L);
+			int globalTableIndex = lua_tointeger(L, lua_gettop(L));
+			lua_pop(L, 1);
+            lua_getfield(L, globalTableIndex, m_writeHandler.c_str());
             Lunar<LUAAnnotation>::push(L, &luaAnnotation);
             Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
             lua_pushnumber(L,

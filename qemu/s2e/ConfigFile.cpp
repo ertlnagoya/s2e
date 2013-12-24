@@ -348,7 +348,10 @@ bool ConfigFile::isFunctionDefined(const std::string &name) const
 {
     bool ret = true;
     lua_State *L = m_luaState;
-    lua_getfield(L, LUA_GLOBALSINDEX, name.c_str());
+    lua_pushglobaltable(L);
+	int globalTableIndex = lua_tointeger(L, lua_gettop(L));
+	lua_pop(L, 1);
+    lua_getfield(L, globalTableIndex, name.c_str());
     if (lua_isnil(L,-1)) {
         ret = false;
     }
