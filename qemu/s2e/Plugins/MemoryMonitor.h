@@ -79,7 +79,7 @@ public:
         uint64_t /* address */,
         klee::ref<klee::Expr> /* value */,
         int /*type*/ > MemoryAccessSignal;
-    typedef sigc::functor_base<void, s2e::S2EExecutionState *, unsigned long, klee::ref<klee::Expr>, int, sigc::nil, sigc::nil, sigc::nil> * MemoryAccessHandlerPtr;
+    typedef sigc::functor_base<void, s2e::S2EExecutionState *, uint64_t, klee::ref<klee::Expr>, int, sigc::nil, sigc::nil, sigc::nil> * MemoryAccessHandlerPtr;
 //    typedef sigc::slot<void, S2EExecutionState *, uint64_t, klee::ref<klee::Expr>, MemoryAccessType> MemoryAccessSlot;
 
 
