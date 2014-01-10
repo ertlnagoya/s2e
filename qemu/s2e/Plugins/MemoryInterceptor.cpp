@@ -205,6 +205,36 @@ bool MemoryInterceptor::slotMemoryWrite(S2EExecutionState *state,
 void MemoryInterceptor::addInterceptor(MemoryInterceptorListener * listener)
 {
     //TODO: Check that there is no intersection with an already added plugin
+    for (std::vector< MemoryInterceptorListener* >::const_iterator itr = m_listeners.begin();
+         itr != m_listeners.end();
+         itr++)
+    {
+
+        //This condition checks that the range monitored by the new interceptor does not intersect with any
+        //range currently monitored
+        if (
+             (
+               (listener->getAddress() >= (*itr)->getAddress() &&
+                 listener->getAddress() < (*itr)->getAddress() + (*itr)->getSize()) ||
+               (listener->getAddress() + listener->getSize() > (*itr)->getAddress() &&
+                 listener->getAddress() + listener->getSize() <= (*itr)->getAddress() + (*itr)->getSize()) ||
+               (listener->getAddress() < (*itr)->getAddress() &&
+                 listener->getAddress() + listener->getSize() >= (*itr)->getAddress() + (*itr)->getSize())) &&
+             (listener->getAccessMask() & (*itr)->getAccessMask()) != 0)
+        {
+            s2e()->getWarningsStream()
+                    << "Trying to add memory interceptor handler for address range "
+                    << hexval(listener->getAddress()) << "-"
+                    << hexval(listener->getAddress()  + listener->getSize())
+                    << " (access " << hexval(listener->getAccessMask())
+                    << ") is intersecting with already registered handler "
+                    << hexval((*itr)->getAddress()) << "-"
+                    << hexval((*itr)->getAddress()  + (*itr)->getSize())
+                    << " (access " << hexval((*itr)->getAccessMask()) << "). "
+                    << "Not adding new listener." << '\n';
+        }
+    }
+
     m_listeners.push_back(listener);
 
     if ((listener->getAccessMask() & (ACCESS_TYPE_READ | ACCESS_TYPE_EXECUTE)) && !m_readInterceptorRegistered)
