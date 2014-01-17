@@ -61,6 +61,8 @@ public:
     uint64_t readMemory(S2EExecutionState*, uint32_t address, int size);
     
     void parse(std::string& token);
+	bool wasHit() {return m_hit;}
+	void resetHit() {m_hit = false;}
     
 private:
     static void * receiveThread(void *);
@@ -76,6 +78,8 @@ private:
     std::tr1::shared_ptr<s2e::QemuTcpSocket> m_socket;
     S2EExecutionState * m_state;
     bool m_verbose;
+	bool m_hit;
+	void setHit() {m_hit = true;}
 };
     
 class RemoteMemoryListener : public MemoryAccessHandler
@@ -117,6 +121,8 @@ public:
     virtual ~RemoteMemory();
 
     void initialize();
+	bool wasHit() {return m_remoteInterface->wasHit();}
+	void resetHit() {m_remoteInterface->resetHit();}
     
 private:
     enum MemoryAccessType {EMemoryAccessType_None, EMemoryAccessType_Read, EMemoryAccessType_Write, EMemoryAccessType_Execute};

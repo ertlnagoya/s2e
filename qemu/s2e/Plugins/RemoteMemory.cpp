@@ -279,6 +279,7 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
      json::Object params;
      json::Object cpu_state;
      
+	 setHit();
      if (m_verbose)
         m_s2e->getDebugStream() << "[RemoteMemory] reading memory from address " << hexval(address) << "[" << size << "]" << '\n';
      request.Insert(json::Object::Member("cmd", json::String("read")));
@@ -372,6 +373,7 @@ void RemoteMemoryInterface::writeMemory(S2EExecutionState * state, uint32_t addr
      json::Object params;
      json::Object cpu_state;
      
+	 setHit();
      if (m_verbose)
         m_s2e->getDebugStream() << "[RemoteMemory] writing memory at address " << hexval(address) << "[" << size << "] = " << hexval(value) << '\n';
      request.Insert(json::Object::Member("cmd", json::String("write")));
