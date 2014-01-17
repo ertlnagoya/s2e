@@ -117,7 +117,8 @@ uint32_t ExecutionTracer::writeData(
     if (size) {
         if (fwrite(data, size, 1, m_LogFile) != 1) {
             //at this point the log is corrupted.
-            assert(false);
+			//printf("cannot write log?\n");
+            //assert(false);
         }
     }
 
