@@ -24,6 +24,7 @@ class StatGenerator : public Plugin
 				*state, TranslationBlock *tb, uint64_t end_pc, bool isValid, uint64_t target_pc);
 		void slotExecuteBlockStart(S2EExecutionState* state, uint64_t pc);
 		void slotExecuteBlockEnd(S2EExecutionState* state, uint64_t pc);
+		void printStat(uint64_t pc);
 
 	private:
 		bool m_traceBlockTranslation;
@@ -33,7 +34,10 @@ class StatGenerator : public Plugin
 
 		std::map<uint64_t, uint64_t> m_bbExecutionFrequency;
 		std::map<uint64_t, bool> m_bbHasIOAccesses;
+		std::map<uint64_t, uint64_t> m_bbLen;
 		uint64_t m_numberOfExecutedBB;
+
+		uint64_t m_bb_start_pc; /* the start of BB is cached */
 };
 
 }

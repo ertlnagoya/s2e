@@ -59,14 +59,23 @@ void StatGenerator::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc)
 	if (m_verbose)
 		std::cout << "Executing block START at " << std::hex << pc << std::dec
 			<< std::endl;
-	m_remoteMemory->resetHit();
 
 	++m_numberOfExecutedBB;
-	m_bbExecutionFrequency[pc]++;
+	++m_bbExecutionFrequency[pc];
+	std::map<uint64_t, bool>::const_iterator it = m_bbHasIOAccesses.find(pc);
+	if (it == m_bbHasIOAccesses.end()) {
+		/* basic block might be IO */
+		m_remoteMemory->resetHit();
+	} else {
+		/* basic block already mapped as IO */
+		std::cout << "BB is IO @START at " << std::hex << pc << std::dec
+			<< " times " << m_bbExecutionFrequency[pc] << std::endl;
+	}
 	/* process the pc */
 	if (m_verbose)
 		std::cout << "Frequency for bb at " << std::hex << pc << " " <<
 			m_bbExecutionFrequency[pc] << std::dec << std::endl;
+	m_bb_start_pc = pc;
 }
 
 void StatGenerator::slotExecuteBlockEnd(S2EExecutionState *state, uint64_t pc)
@@ -75,9 +84,28 @@ void StatGenerator::slotExecuteBlockEnd(S2EExecutionState *state, uint64_t pc)
 		std::cout << "Executing block END at " << std::hex << pc << std::dec
 			<< std::endl;
 	if (m_remoteMemory->wasHit()) {
-		std::cout << "BB is IO @END at " << std::hex << pc << std::dec
-			<< std::endl;
+		m_bbHasIOAccesses[m_bb_start_pc] = true;
+		m_remoteMemory->resetHit();
+		if (m_verbose)
+			std::cout << "BB is IO @END at " << std::hex << pc << std::dec
+				<< std::endl;
+		/* TODO evaluate BB score for migration */
 	}
+	/* save the length of the BB,
+	 * asume each instruction takes 4 bytes
+	 */
+	m_bbLen[m_bb_start_pc] = (pc - m_bb_start_pc) >> 2;
+}
+
+void StatGenerator::printStat(uint64_t pc)
+{
+	std::map<uint64_t, uint64_t>::const_iterator it = m_bbLen.find(pc);
+	if (it == m_bbLen.end()) {
+		std::cout << "Basic Block @ " << std::hex << pc << std::dec
+			<< " does not exists or it wasn't yet explored" << std::endl;
+		return;
+	}
+	/* TODO: print */
 }
 
 }
