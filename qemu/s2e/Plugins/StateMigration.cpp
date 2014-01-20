@@ -48,9 +48,11 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 	 * 5. restore state of the emulator
 	 */
 	/* XXX: asume ARM code */
-	uint64_t data_len = m_end_pc - m_start_pc + 4;
-	void *code = malloc(data_len);
+	uint64_t data_len = m_end_pc - m_start_pc + 4; /* including last instruction */
+	uint8_t *code = (uint8_t *)malloc(data_len);
+	//void *data = NULL; /* TODO, copy data */
 	bool ret = state->readMemoryConcrete(pc, code, data_len);
+	std::tr1::shared_ptr<RemoteMemoryInterface> remoteMemoryInterface = m_remoteMemory->getInterface();
 
 	if (m_verbose) {
 		if (ret == false) {

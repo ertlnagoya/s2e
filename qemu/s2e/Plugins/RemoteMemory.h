@@ -123,6 +123,7 @@ public:
     void initialize();
 	bool wasHit() {return m_remoteInterface->wasHit();}
 	void resetHit() {m_remoteInterface->resetHit();}
+	std::tr1::shared_ptr<RemoteMemoryInterface> getInterface() {return m_remoteInterface;}
     
 private:
     enum MemoryAccessType {EMemoryAccessType_None, EMemoryAccessType_Read, EMemoryAccessType_Write, EMemoryAccessType_Execute};
