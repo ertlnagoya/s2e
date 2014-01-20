@@ -66,6 +66,47 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 		}
 	}
 
+	//uint64_t val = remoteMemoryInterface->readMemory(state, pc, 4);
+	uint32_t backup_isn;
+	uint32_t brk_isn = 0xe1200472;
+		/*
+	printf("[StateMigration]: read through remote mem: 0x%016lx\n",
+			val);
+			*/
+	printf("[StateMigration]: copying %ld bytes from emulator to "
+			"device\n", data_len);
+	backup_isn = *((uint32_t *)(&code[data_len-4]));
+	for (int i = 0; i < data_len-4; ++i)
+		remoteMemoryInterface->writeMemory(state, pc+i, 1, (uint64_t)code[i]);
+	*((uint32_t *)(&code[data_len-4])) = brk_isn;
+	for (int i = 3; i >= 0; --i) {
+		/* XXX: write big endian */
+		remoteMemoryInterface->writeMemory(state, pc+data_len-4+(3-i), 1, (uint64_t)(0xff & (brk_isn >> (8*i))));
+	}
+	printf("[StateMigration]: done\n");
+	uint64_t dummy = remoteMemoryInterface->readMemory(state, pc+data_len-4, 4);
+	/* issue a dummy read for flushing the writes */
+	printf("[StateMigration]: read done: 0x%016lx\n", dummy);
+	//while (1)
+	//	;
+	assert(0);
+	//printf("[StateMigration]: adding instruction 0x%02hhx%02hhx%02hhx%02hhx\n",
+	//		((uint8_t *) code)[data_len-4],
+	//		((uint8_t *) code)[data_len-3],
+	//		((uint8_t *) code)[data_len-2],
+	//		((uint8_t *) code)[data_len-1]);
+
+	/* This is a test */
+# if 0
+	val = remoteMemoryInterface->readMemory(state, 0x12f38, 4);
+	printf("[StateMigration]: read through remote mem: 0x%016lx\n",
+			val);
+
+	remoteMemoryInterface->writeMemory(state, 0x12f38, 1, (uint64_t)'A');
+	val = remoteMemoryInterface->readMemory(state, 0x12f38, 4);
+	printf("[StateMigration]: read after write: 0x%016lx\n",
+			val);
+#endif
 }
 
 }
