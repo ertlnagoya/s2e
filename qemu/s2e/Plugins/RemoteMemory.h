@@ -59,6 +59,10 @@ public:
     virtual ~RemoteMemoryInterface();
     void writeMemory(S2EExecutionState*, uint32_t address, int size, uint64_t value);
     uint64_t readMemory(S2EExecutionState*, uint32_t address, int size);
+
+	/* low level operations */
+	void submitRequest(S2EExecutionState *, json::Object &request);
+	bool waitForAnswer(S2EExecutionState *, std::tr1::shared_ptr<json::Object> &response);
     
     void parse(std::string& token);
 	bool wasHit() {return m_hit;}

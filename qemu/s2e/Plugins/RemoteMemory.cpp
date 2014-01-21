@@ -343,24 +343,27 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
      request.Insert(json::Object::Member("params", params));
      request.Insert(json::Object::Member("cpu_state", cpu_state));
 
-     qemu_mutex_lock(&m_mutex);
-     m_state = state;
-     
-     json::Writer::Write(request, *m_socket);
-     m_socket->flush();
+	 std::tr1::shared_ptr<json::Object> response;
+	 submitRequest(state, request);
+	 waitForAnswer(state, response);
 
-     qemu_cond_wait(&m_responseCond, &m_mutex);
-     
-     //TODO: There could be multiple responses, but we assume the first is the right
-     std::tr1::shared_ptr<json::Object> response = m_responseQueue.front();
-     m_responseQueue.pop();
-     m_state = NULL;
-     qemu_mutex_unlock(&m_mutex);
-     
-     //TODO: No checking if this is the right response, if there is an attribute 'value'
+	//TODO: There could be multiple responses, but we assume the first is the right
      json::String& strValue = (*response)["value"];
-//     m_s2e->getMessagesStream() << "[RemoteMemory] Remote returned value " << strValue << '\n';
      return hexBufToInt(strValue);
+}
+
+bool RemoteMemoryInterface::waitForAnswer(S2EExecutionState *state,
+		std::tr1::shared_ptr<json::Object> &response)
+{
+	qemu_mutex_lock(&m_mutex);
+	m_state = state;
+	qemu_cond_wait(&m_responseCond, &m_mutex);
+
+	response = m_responseQueue.front();
+	m_responseQueue.pop();
+	m_state = NULL;
+	qemu_mutex_unlock(&m_mutex);
+	return true;
 }
   
 /**
@@ -422,12 +425,17 @@ void RemoteMemoryInterface::writeMemory(S2EExecutionState * state, uint32_t addr
      request.Insert(json::Object::Member("params", params));
      request.Insert(json::Object::Member("cpu_state", cpu_state));
 
-     qemu_mutex_lock(&m_mutex);
-     m_state = state;
-     
-     json::Writer::Write(request, *m_socket);
-     m_socket->flush();
-     qemu_mutex_unlock(&m_mutex);
+	 submitRequest(state, request);
+}
+
+void RemoteMemoryInterface::submitRequest(S2EExecutionState *state,
+		json::Object &request)
+{
+	qemu_mutex_lock(&m_mutex);
+	m_state = state;
+	json::Writer::Write(request, *m_socket);
+	m_socket->flush();
+	qemu_mutex_unlock(&m_mutex);
 }
 
 RemoteMemoryInterface::~RemoteMemoryInterface()
