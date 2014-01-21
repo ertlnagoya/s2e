@@ -344,8 +344,7 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
      request.Insert(json::Object::Member("cpu_state", cpu_state));
 
 	 std::tr1::shared_ptr<json::Object> response;
-	 submitRequest(state, request);
-	 waitForAnswer(state, response);
+	 submitAndWait(state, request, response);
 
 	//TODO: There could be multiple responses, but we assume the first is the right
      json::String& strValue = (*response)["value"];
@@ -436,6 +435,29 @@ void RemoteMemoryInterface::submitRequest(S2EExecutionState *state,
 	json::Writer::Write(request, *m_socket);
 	m_socket->flush();
 	qemu_mutex_unlock(&m_mutex);
+}
+bool RemoteMemoryInterface::submitAndWait(S2EExecutionState *state,
+		json::Object &request,
+		std::tr1::shared_ptr<json::Object> &response)
+{
+	qemu_mutex_lock(&m_mutex);
+	m_state = state;
+	json::Writer::Write(request, *m_socket);
+	m_socket->flush();
+
+	qemu_cond_wait(&m_responseCond, &m_mutex);
+
+	/* TODO: test if this is our request reply.
+	 * Right now, the hidden assumption is that each submited request
+	 * that requires an aswer is submited via this function i.e. we're
+	 * *always* popping the reply
+	 */
+	response = m_responseQueue.front();
+	m_responseQueue.pop();
+	m_state = NULL;
+	qemu_mutex_unlock(&m_mutex);
+
+	return true;
 }
 
 RemoteMemoryInterface::~RemoteMemoryInterface()

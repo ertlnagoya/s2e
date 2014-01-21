@@ -63,6 +63,9 @@ public:
 	/* low level operations */
 	void submitRequest(S2EExecutionState *, json::Object &request);
 	bool waitForAnswer(S2EExecutionState *, std::tr1::shared_ptr<json::Object> &response);
+	bool submitAndWait(S2EExecutionState *,
+			json::Object &request,
+			std::tr1::shared_ptr<json::Object> &response);
     
     void parse(std::string& token);
 	bool wasHit() {return m_hit;}
