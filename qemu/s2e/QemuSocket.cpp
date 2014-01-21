@@ -192,15 +192,17 @@ namespace s2e
     int TcpStreamBuffer::overflow(int c)
     {
         size_t todoLength = pptr() - pbase();
-//        size_t length = todoLength;
 
         if (c != EOF)
         {
             *pptr() = static_cast<char>(c);
             todoLength += 1;
         }
-        //TODO: check if all bytes have been written
-        m_sock->write(pbase(), todoLength);
+
+        size_t length = todoLength;
+        m_sock->write(pbase(), length);
+
+        assert(todoLength == length);
         setp(pbase(), epptr());
         
         return std::char_traits<char>::not_eof(c);
@@ -224,14 +226,14 @@ namespace s2e
     }
     
     QemuTcpSocket::QemuTcpSocket()
-        : TcpStream(this, 50),
+        : TcpStream(this, 2048),
           m_socket(0),
           m_isConnected(false)
     {
     }
     
     QemuTcpSocket::QemuTcpSocket(const char * remote_address) throw (SocketConnectException)
-        : TcpStream(this, 50),
+        : TcpStream(this, 2048),
           m_socket(0),
           m_isConnected(false)
     {
@@ -243,7 +245,10 @@ namespace s2e
             
             if (sock == -1)
                 continue;
-            
+
+            int size = 1024;
+            setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, NULL, 0);
+            setsockopt(sock, IPPROTO_TCP, TCP_MAXSEG, &size, sizeof(size));
             if (connect(sock, (*itr)->getCSocketAddress(), (*itr)->getCSocketAddressSize()) != -1)
             {
                 m_socket = sock;
@@ -326,17 +331,26 @@ repeat_read:
         if (!m_isConnected)
             throw SocketNotConnectedException();
             
-        int written_length = ::write(m_socket, buffer, length);
-        
-        if (written_length == -1)
-        {
-            std::stringstream msg;
-            
-            msg << "Error " << std::dec << errno << " during socket write";
-            throw SocketException(msg.str().c_str(), errno);
-        }
-        
-        length = written_length;  
+        int origLen = length;
+        int writtenLen = 0;
+        do {
+            int wBytes = ::write(m_socket, buffer+writtenLen, length);
+            if (likely(wBytes >= 0))
+            {
+                writtenLen += wBytes;
+                length -= wBytes;
+            } else {
+                std::stringstream msg;
+                msg << "Error " << std::dec << errno << " during socket write";
+                throw SocketException(msg.str().c_str(), errno);
+            }
+            if (unlikely(writtenLen != origLen)) {
+                // Receiver is not keeping up, lowering pressure
+                sleep(1);
+            }
+        } while (writtenLen != origLen);
+
+        length = writtenLen;
     }
     
     size_t QemuTcpSocket::getAvailableBytes(uint64_t timeout)
@@ -392,6 +406,9 @@ repeat_read:
             int optval = 1;
             //Allow address reuse
             setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(optval));
+            optval = 1024;
+            setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, NULL, 0);
+            setsockopt(sock, IPPROTO_TCP, TCP_MAXSEG, &optval, sizeof(optval));
             
             if (bind(sock, (*itr)->getCSocketAddress(), (*itr)->getCSocketAddressSize()) != -1)
             {
