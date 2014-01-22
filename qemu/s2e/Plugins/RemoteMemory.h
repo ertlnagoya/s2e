@@ -66,6 +66,7 @@ public:
 	bool submitAndWait(S2EExecutionState *,
 			json::Object &request,
 			std::tr1::shared_ptr<json::Object> &response);
+	bool buildCPUState(S2EExecutionState *, json::Object &cpu_state, std::string op);
     
     void parse(std::string& token);
 	bool wasHit() {return m_hit;}

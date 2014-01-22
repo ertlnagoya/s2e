@@ -305,41 +305,7 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
      params.Insert(json::Object::Member("address", json::String(intToHex(address))));
      params.Insert(json::Object::Member("size", json::String(intToHex(size))));
      
-     //Build cpu state
-#ifdef TARGET_ARM
-#define CPU_NB_REGS 16
-#endif
-     for (int i = 0; i < CPU_NB_REGS - 1; i++)
-     {
-         std::stringstream ss;
-         
-         ss << "r";
-         ss << i;
-         
-         klee::ref<klee::Expr> exprReg = state->readCpuRegister(CPU_REG_OFFSET(i), CPU_REG_SIZE << 3);
-         if (isa<klee::ConstantExpr>(exprReg))
-         {
-             cpu_state.Insert(json::Object::Member(ss.str(), json::String(intToHex(cast<klee::ConstantExpr>(exprReg)->getZExtValue()))));
-         }
-         else
-         {
-             std::string example = intToHex(m_s2e->getExecutor()->toConstantSilent(*state, exprReg)->getZExtValue());
-             m_s2e->getWarningsStream() << "[RemoteMemory] Register " << i << " was symbolic during a read at "
-            		 << hexval(state->getPc()) <<", taking " << example << " as an example" << '\n';
-             cpu_state.Insert(json::Object::Member(ss.str(), json::String(example)));
-         }
-     }
-     
-     cpu_state.Insert(json::Object::Member("pc", json::String(intToHex(state->getPc()))));
-     
-#ifdef TARGET_ARM
-     //TODO: Fill CPSR register
-     
-//     cpsr.Insert(json::Object::Member("cf", json::Bool(
-     
-     cpu_state.Insert(json::Object::Member("cpsr", json::String(intToHex(state->getFlags()))));
-#endif
-     
+	 buildCPUState(state, cpu_state, "read");
      request.Insert(json::Object::Member("params", params));
      request.Insert(json::Object::Member("cpu_state", cpu_state));
 
@@ -386,45 +352,62 @@ void RemoteMemoryInterface::writeMemory(S2EExecutionState * state, uint32_t addr
      params.Insert(json::Object::Member("address", json::String(intToHex(address))));
      params.Insert(json::Object::Member("size", json::String(intToHex(size))));
      
-     //Build cpu state
-#ifdef TARGET_ARM
-#define CPU_NB_REGS 16
-#endif
-     for (int i = 0; i < CPU_NB_REGS - 1; i++)
-     {
-         std::stringstream ss;
-         
-         ss << "r";
-         ss << i;
-         
-         klee::ref<klee::Expr> exprReg = state->readCpuRegister(CPU_REG_OFFSET(i), CPU_REG_SIZE << 3);
-         if (isa<klee::ConstantExpr>(exprReg))
-         {
-             cpu_state.Insert(json::Object::Member(ss.str(), json::String(intToHex(cast<klee::ConstantExpr>(exprReg)->getZExtValue()))));
-         }
-         else
-         {
-             std::string example = intToHex(m_s2e->getExecutor()->toConstantSilent(*state, exprReg)->getZExtValue());
-             m_s2e->getWarningsStream() << "[RemoteMemory] Register " << i << " was symbolic during a write at "
-            		 << hexval(state->getPc()) << ", taking " << example << " as an example" << '\n';
-             cpu_state.Insert(json::Object::Member(ss.str(), json::String(example)));
-         }
-     }
      
-     cpu_state.Insert(json::Object::Member("pc", json::String(intToHex(state->getPc()))));
-     
-#ifdef TARGET_ARM
-     //TODO: Fill CPSR register
-     
-//     cpsr.Insert(json::Object::Member("cf", json::Bool(
-     
-     cpu_state.Insert(json::Object::Member("cpsr", json::String(intToHex(state->getFlags()))));
-#endif
-     
+	 buildCPUState(state, cpu_state, "write");
      request.Insert(json::Object::Member("params", params));
      request.Insert(json::Object::Member("cpu_state", cpu_state));
 
 	 submitRequest(state, request);
+}
+
+bool RemoteMemoryInterface::buildCPUState(S2EExecutionState *state,
+		json::Object &cpu_state,
+		std::string op = "access")
+{
+	bool ret = true;
+
+#ifdef TARGET_ARM
+#define CPU_NB_REGS 16
+#endif
+	for (int i = 0; i < CPU_NB_REGS - 1; i++)
+	{
+		std::stringstream ss;
+
+		ss << "r";
+		ss << i;
+
+		klee::ref<klee::Expr> exprReg =
+			state->readCpuRegister(CPU_REG_OFFSET(i),
+					CPU_REG_SIZE << 3);
+		if (isa<klee::ConstantExpr>(exprReg))
+		{
+			cpu_state.Insert(json::Object::Member(ss.str(),
+						json::String(intToHex(cast<klee::ConstantExpr>(exprReg)->getZExtValue()))));
+		}
+		else
+		{
+			std::string example =
+				intToHex(m_s2e->getExecutor()->toConstantSilent(*state,
+							exprReg)->getZExtValue());
+			m_s2e->getWarningsStream() << "[RemoteMemory] Register "
+				<< i << " was symbolic during a " << op << " at "
+				<< hexval(state->getPc()) << ", taking " <<
+				example << " as an example" << '\n';
+			cpu_state.Insert(json::Object::Member(ss.str(),
+						json::String(example)));
+			ret = false;
+		}
+	}
+	cpu_state.Insert(json::Object::Member("pc",
+				json::String(intToHex(state->getPc()))));
+
+#ifdef TARGET_ARM
+	//TODO: Fill CPSR register
+	//     cpsr.Insert(json::Object::Member("cf", json::Bool(
+	cpu_state.Insert(json::Object::Member("cpsr",
+				json::String(intToHex(state->getFlags()))));
+#endif
+	return ret;
 }
 
 void RemoteMemoryInterface::submitRequest(S2EExecutionState *state,
