@@ -17,7 +17,7 @@ class StateMigration : public Plugin
 {
 	S2E_PLUGIN
 	public:
-		StateMigration(S2E* s2e): Plugin(s2e) {}
+		StateMigration(S2E* s2e): Plugin(s2e) {m_s2e = s2e;}
 		void initialize();
 
 		void slotTranslateBlockStart(ExecutionSignal*, S2EExecutionState
@@ -29,6 +29,15 @@ class StateMigration : public Plugin
 		uint64_t m_end_pc;
 		bool m_verbose;
 		RemoteMemory *m_remoteMemory;
+		std::tr1::shared_ptr<RemoteMemoryInterface> m_remoteMemoryInterface;
+		bool copyToDevice(S2EExecutionState* state, uint64_t addr, uint32_t len);
+		void putBreakPoint(S2EExecutionState* state, uint64_t addr);
+		void resumeExecution(S2EExecutionState* state);
+		bool transferStateToRegisters(S2EExecutionState *state,
+				uint32_t src_regs[16]);
+		bool getRegsFromState(S2EExecutionState *state,
+				uint32_t dst_regs[16]);
+		S2E *m_s2e;
 };
 
 }
