@@ -157,7 +157,7 @@ RemoteMemory::~RemoteMemory()
 {
 }
 
-static std::string intToHex(uint64_t val)
+std::string intToHex(uint64_t val)
 {
     std::stringstream ss;
     

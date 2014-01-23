@@ -141,6 +141,8 @@ private:
     
 };
 
+std::string intToHex(uint64_t);
+
 } // namespace plugins
 } // namespace s2e
 
