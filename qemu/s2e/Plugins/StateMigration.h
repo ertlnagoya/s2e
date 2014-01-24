@@ -39,6 +39,8 @@ class StateMigration : public Plugin
 				uint32_t dst_regs[16]);
 		bool getRegsFromState(S2EExecutionState *state,
 				uint32_t dst_regs[16]);
+		bool setRegsToState(S2EExecutionState *state,
+				uint32_t src_regs[16]);
 		S2E *m_s2e;
 };
 

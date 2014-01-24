@@ -181,6 +181,20 @@ bool StateMigration::getRegsFromState(S2EExecutionState *state,
 	return ret;
 }
 
+bool StateMigration::setRegsToState(S2EExecutionState *state,
+				uint32_t src_regs[16])
+{
+#ifdef TARGET_ARM
+#define CPU_NB_REGS 16
+#endif
+	for (int i = 0; i < CPU_NB_REGS - 1; i++) {
+		state->writeCpuRegisterConcrete(CPU_REG_OFFSET(i),
+				&src_regs[i],
+				CPU_REG_SIZE);
+	}
+	return true;
+}
+
 void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc)
 {
 	/* TODO:
