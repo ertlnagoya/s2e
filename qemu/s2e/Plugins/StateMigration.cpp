@@ -227,8 +227,19 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 	}
 #endif
 
+	getRegsFromState(state, regs);
+
 	printf("[StateMigration]: start\n");
-#if 0
+	/* migrate crc table */
+	printf("[StateMigration]: migrate crc table\n");
+	copyToDevice(state, 0x1004f400, 256);
+	/* migrate some stack */
+	uint32_t sp = regs[13];
+	printf("[StateMigration]: migrate some stack: 0x%08x\n", sp);
+	copyToDevice(state, sp-1024, 1024);
+#if 1
+	/* migrate code */
+	printf("[StateMigration]: migrate code\n");
 	uint64_t data_len = m_end_pc - m_start_pc + 4; /* including last instruction */
 	copyToDevice(state, pc, data_len);
 	/* TODO: backup instruction */
@@ -267,7 +278,7 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 			(static_cast<std::string>(r)).c_str());
 #endif
 
-#if 1
+#if 0
 	uint32_t brk_isn = 0xe1200472;
 	for (int i = 3; i >= 0; --i) {
 		/* XXX: write big endian */
@@ -280,15 +291,20 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 	}
 #endif
 
-	getRegsFromState(state, regs);
-	regs[15] = 0x18000;
-	transferStateToRegisters(state, regs);
+	//regs[15] = 0x18000;
+	transferStateToDevice(state, regs);
 
 	/* continue */
+	printf("[StateMigration]: resuming\n");
 	resumeExecution(state);
 	m_remoteMemory->getInterface()->readMemory(state, 0x18000, 4);
+
+	printf("[StateMigration]: transfering state from device\n");
+	transferStateFromDevice(state, regs);
 	printf("[StateMigration]: done\n");
-	assert(0);
+	setRegsToState(state, regs);
+	getRegsFromState(state, regs);
+	printf("[StateMigration]: resuming @0x%08x\n", regs[15]);
 
 	/* This is a test */
 # if 0
