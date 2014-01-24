@@ -33,8 +33,10 @@ class StateMigration : public Plugin
 		bool copyToDevice(S2EExecutionState* state, uint64_t addr, uint32_t len);
 		void putBreakPoint(S2EExecutionState* state, uint64_t addr);
 		void resumeExecution(S2EExecutionState* state);
-		bool transferStateToRegisters(S2EExecutionState *state,
+		bool transferStateToDevice(S2EExecutionState *state,
 				uint32_t src_regs[16]);
+		bool transferStateFromDevice(S2EExecutionState *state,
+				uint32_t dst_regs[16]);
 		bool getRegsFromState(S2EExecutionState *state,
 				uint32_t dst_regs[16]);
 		S2E *m_s2e;

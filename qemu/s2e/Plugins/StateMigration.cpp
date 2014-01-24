@@ -75,7 +75,7 @@ void StateMigration::putBreakPoint(S2EExecutionState *state, uint64_t addr)
 			addr);
 }
 
-bool StateMigration::transferStateToRegisters(S2EExecutionState *state,
+bool StateMigration::transferStateToDevice(S2EExecutionState *state,
 				uint32_t src_regs[16])
 {
 #ifdef TARGET_ARM
@@ -100,6 +100,36 @@ bool StateMigration::transferStateToRegisters(S2EExecutionState *state,
 	request.Insert(json::Object::Member("cpu_state", cpu_state));
 
 	m_remoteMemory->getInterface()->submitAndWait(state, request, response);
+	printf("[StateMigration]: done transfering registers\n");
+#endif
+	return true;
+}
+
+bool StateMigration::transferStateFromDevice(S2EExecutionState *state,
+				uint32_t dst_regs[16])
+{
+#ifdef TARGET_ARM
+	json::Object request;
+	std::tr1::shared_ptr<json::Object> response;
+	printf("[StateMigration]: start transfering registers from device\n");
+	request.Insert(json::Object::Member("cmd", json::String("get_cpu_state")));
+	m_remoteMemory->getInterface()->submitAndWait(state, request, response);
+
+	/* r0->r14, r15 is pc */
+	for (int i = 0; i < 15; i++)
+	{
+		std::stringstream ss;
+
+		ss << "cpu_state_r";
+		ss << i;
+		json::String &value = (*response)[ss.str()];
+		dst_regs[i] = strtol((static_cast<std::string>(value)).c_str(), NULL, 16);
+		printf("got val for %s->%08x\n", ss.str().c_str(), dst_regs[i]);
+	}
+	json::String &value = (*response)["cpu_state_pc"];
+	printf("got val for %s->%08x\n", "pc", dst_regs[15]);
+	dst_regs[15] = strtol((static_cast<std::string>(value)).c_str(), NULL, 16);
+
 	printf("[StateMigration]: done transfering registers\n");
 #endif
 	return true;
