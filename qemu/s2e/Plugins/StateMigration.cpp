@@ -54,8 +54,14 @@ bool StateMigration::copyToDevice(S2EExecutionState* state,
 	printf("[StateMigration]: copying %d bytes from emulator to "
 			"device from 0x%08lx\n", len, addr);
 
-	for (int i = 0; i < len; ++i)
-	m_remoteMemory->getInterface()->writeMemory(state, addr+i, 1, (uint64_t)data[i]);
+	for (int i = 0; i < len; i += 4) {
+		uint64_t x = 0;
+		x = data[i];
+		x = (x << 8) | data[i+1];
+		x = (x << 8) | data[i+2];
+		x = (x << 8) | data[i+3];
+		m_remoteMemory->getInterface()->writeMemory(state, addr+i, 4, x);
+	}
 	/* issue a dummy read for flushing the writes */
 	m_remoteMemory->getInterface()->readMemory(state, addr+len-4, 4);
 	printf("[StateMigration]: done copying data to device\n");
