@@ -39,21 +39,10 @@
 #include <s2e/Plugin.h>
 #include <s2e/Plugins/CorePlugin.h>
 #include <s2e/S2EExecutionState.h>
+#include <s2e/Plugins/MemoryAccess.h>
 
 namespace s2e {
 namespace plugins {
-enum AccessType
-{
-    ACCESS_TYPE_READ = 0x1,
-    ACCESS_TYPE_WRITE = 0x2,
-    ACCESS_TYPE_EXECUTE = 0x4,
-    ACCESS_TYPE_CONCRETE_VALUE = 0x8,
-    ACCESS_TYPE_SYMBOLIC_VALUE = 0x10,
-    ACCESS_TYPE_CONCRETE_ADDRESS = 0x20,
-    ACCESS_TYPE_SYMBOLIC_ADDRESS = 0x40,
-    ACCESS_TYPE_NON_IO = 0x80,
-    ACCESS_TYPE_IO = 0x100
-};
 
 class MemoryInterceptorListener
 {
