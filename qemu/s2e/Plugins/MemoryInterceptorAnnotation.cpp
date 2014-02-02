@@ -203,6 +203,11 @@ namespace s2e
                             | ACCESS_TYPE_EXECUTE;
                 }
 
+                if (!(access_type & ACCESS_TYPE_SIZE_ANY))
+                {
+                	access_type |= ACCESS_TYPE_SIZE_ANY;
+                }
+
                 //If no IO or non-IO is specified, both are assumed
                 if (!(access_type & (ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO)))
                 {

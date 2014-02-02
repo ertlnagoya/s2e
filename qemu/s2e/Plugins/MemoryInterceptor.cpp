@@ -107,6 +107,22 @@ klee::ref<klee::Expr> MemoryInterceptor::slotMemoryRead(S2EExecutionState *state
     else
         access_type |= ACCESS_TYPE_SYMBOLIC_ADDRESS;
 
+    switch (size)
+    {
+    case 8:
+    	access_type |= ACCESS_TYPE_SIZE_1; break;
+    case 16:
+        access_type |= ACCESS_TYPE_SIZE_2; break;
+    case 32:
+        access_type |= ACCESS_TYPE_SIZE_4; break;
+    case 64:
+        access_type |= ACCESS_TYPE_SIZE_8; break;
+    case 128:
+        access_type |= ACCESS_TYPE_SIZE_16; break;
+    default:
+    	assert(false && "Unknown memory access size");
+    }
+
     if (this->m_verbose)
     {
         s2e()->getDebugStream()
@@ -169,6 +185,22 @@ bool MemoryInterceptor::slotMemoryWrite(S2EExecutionState *state,
     }
     else
         access_type |= ACCESS_TYPE_SYMBOLIC_VALUE;
+
+    switch (value->getWidth())
+	{
+        case 8:
+        	access_type |= ACCESS_TYPE_SIZE_1; break;
+        case 16:
+            access_type |= ACCESS_TYPE_SIZE_2; break;
+        case 32:
+            access_type |= ACCESS_TYPE_SIZE_4; break;
+        case 64:
+            access_type |= ACCESS_TYPE_SIZE_8; break;
+        case 128:
+            access_type |= ACCESS_TYPE_SIZE_16; break;
+        default:
+        	assert(false && "Unknown memory access size");
+	}
 
     if (this->m_verbose)
     {
