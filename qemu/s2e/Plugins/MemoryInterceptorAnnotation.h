@@ -81,8 +81,10 @@ private:
     std::string m_readHandler;
     std::string m_writeHandler;
     Annotation* m_annotation;
+    std::map<uint64_t, klee::ref< klee::Expr > > m_writtenSymbolicValues;
 
     virtual ~MemoryInterceptorAnnotationHandler() {}
+    klee::ref< klee::Expr > createSymbolicValue(S2EExecutionState *state, std::string name, unsigned size);
 };
 
 } // namespace plugins

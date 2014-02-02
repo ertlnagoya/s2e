@@ -300,6 +300,7 @@ namespace s2e
             lua_State *L = m_s2e->getConfig()->getState();
             LUAAnnotation luaAnnotation(m_annotation, state);
             S2ELUAExecutionState lua_s2e_state(state);
+            uint64_t address = cast < klee::ConstantExpr > (virtaddr)->getZExtValue();
 
             assert(
                     !m_readHandler.empty()
@@ -308,8 +309,7 @@ namespace s2e
             lua_getglobal(L, m_readHandler.c_str());
             Lunar<LUAAnnotation>::push(L, &luaAnnotation);
             Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
-            lua_pushnumber(L,
-                    cast < klee::ConstantExpr > (virtaddr)->getZExtValue());
+            lua_pushnumber(L, address);
             lua_pushnumber(L, size / 8);
             lua_pushboolean(L, is_io);
             lua_pushboolean(L, is_code);
@@ -333,40 +333,36 @@ namespace s2e
                 }
             case 2: //Unconstrained symbolic value; name of symbolic value is in 2nd argument
                 {
-                    //Check already here if state is concrete to avoid creating unused symbolic values
-                    if (state->isRunningConcrete())
-                    {
-                        if (state->getPc() != state->getTb()->pc) {
-                            m_s2e->getWarningsStream() << "Switching to symbolic mode because a "
-                                    << "MemoryInterceptorAnnotation lua read annotation "
-                                    << "returned a symbolic value in concrete mode.\n"
-                                    << "This most likely happened "
-                                    << "because one of your plugins wants to switch "
-                                    << "to symbolic mode. The problem is that some instructions\n"
-                                    << "already have been executed in the current translation block and will "
-                                    << "be reexecuted in symbolic mode. This is fine as long as\n"
-                                    << "those instructions do not have any undesired side effects. Verify the "
-                                    << "translation block containing PC " << hexval(state->getPc())
-                                    << " does not have any\n"
-                                    << "side effects or switch to symbolic execution mode before "
-                                    << "if it does (e.g., by placing an Annotation at the beginning of the\n"
-                                    << "translation block)."
-                                    << '\n';
-                        }
+                	std::string name = lua_tostring(L, lua_gettop(L));
+                	lua_pop(L, 2);
 
-
-                        g_s2e->getDebugStream() << "[MemoryInterceptorAnnotation] read annotation returned symbolic "
-                                << "value in concrete mode at PC " << hexval(state->getPc())
-                                << ", switching to symbolic mode" << '\n';
-                        state->jumpToSymbolicCpp();
-                    }
-                    else
-                    {
-                        std::string name = lua_tostring(L, lua_gettop(L));
-                        lua_pop(L, 2);
-                        return state->createSymbolicValue(name, size);
-                    }
+                	return this->createSymbolicValue(state, name, size);
                 }
+            case 3: //Unconstrained symbolic value; the value is injected only once,
+            	//A new symbolic value is created on the first return with this value,
+            	//for all further returns the same symbolic value is used.
+            	//Name of symbolic value is in 2nd argument
+			{
+				std::string name = lua_tostring(L, lua_gettop(L));
+				lua_pop(L, 2);
+
+				std::map< uint64_t, klee::ref< klee::Expr > >::const_iterator itr =
+						m_writtenSymbolicValues.find(address);
+				//Check if this memory location has already been accessed
+				if ( itr != m_writtenSymbolicValues.end() )
+				{
+					assert(itr->second->getWidth() == size);
+
+					return itr->second;
+				}
+				else
+				{
+					klee::ref< klee::Expr > symbolicValue = this->createSymbolicValue(state, name, size);
+					//TODO: Address type hardcoded
+					this->m_writtenSymbolicValues[address] = symbolicValue;
+					return symbolicValue;
+				}
+			}
             default:
                 {
                     m_s2e->getWarningsStream()
@@ -377,6 +373,48 @@ namespace s2e
                 }
 
             }
+        }
+
+        klee::ref< klee::Expr >
+        MemoryInterceptorAnnotationHandler::createSymbolicValue(
+        		S2EExecutionState *state,
+        		std::string name,
+        		unsigned size)
+        {
+        	//Check already here if state is concrete to avoid creating unused symbolic values
+			if (state->isRunningConcrete())
+			{
+				if (state->getPc() != state->getTb()->pc) {
+					m_s2e->getWarningsStream() << "Switching to symbolic mode because a "
+							<< "MemoryInterceptorAnnotation lua read annotation "
+							<< "returned a symbolic value in concrete mode.\n"
+							<< "This most likely happened "
+							<< "because one of your plugins wants to switch "
+							<< "to symbolic mode. The problem is that some instructions\n"
+							<< "already have been executed in the current translation block and will "
+							<< "be reexecuted in symbolic mode. This is fine as long as\n"
+							<< "those instructions do not have any undesired side effects. Verify the "
+							<< "translation block containing PC " << hexval(state->getPc())
+							<< " does not have any\n"
+							<< "side effects or switch to symbolic execution mode before "
+							<< "if it does (e.g., by placing an Annotation at the beginning of the\n"
+							<< "translation block)."
+							<< '\n';
+				}
+
+
+				g_s2e->getDebugStream() << "[MemoryInterceptorAnnotation] read annotation returned symbolic "
+						<< "value in concrete mode at PC " << hexval(state->getPc())
+						<< ", switching to symbolic mode" << '\n';
+				state->jumpToSymbolicCpp();
+			}
+			else
+			{
+				return state->createSymbolicValue(name, size);
+			}
+
+			assert(false && "This point should never be reached");
+			return klee::ref< klee::Expr >();
         }
 
         bool
