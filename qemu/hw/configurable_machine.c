@@ -45,10 +45,23 @@
 
 // static struct arm_boot_info versatile_binfo;
 
+static off_t get_file_size(const char * path)
+{
+	struct stat64 stat;
+
+	if (stat64(path, &stat))
+	{
+		printf("ERROR: Getting file size for file %s\n", path);
+		return 0;
+	}
+
+	return stat.st_size;
+}
+
 static QDict * load_configuration(const char * filename)
 {
     int file = open(filename, O_RDONLY);
-    off_t filesize;
+    off_t filesize = get_file_size(filename);
     char * filedata = NULL;
     ssize_t err;
     QObject * obj;
@@ -58,9 +71,6 @@ static QDict * load_configuration(const char * filename)
         printf("ERROR: configurable_machine cannot find your machine configuration file '%s'\n", filename);
         exit(1);
     }
-
-    filesize = lseek(file, 0, SEEK_END);
-    lseek(file, 0, SEEK_SET);
 
     printf("Trying to allocate %ld bytes\n", filesize);
 
@@ -468,16 +478,16 @@ static void board_init(ram_addr_t ram_size,
                     strcat(relative_filename, filename);
 
                     file = open(relative_filename, O_RDONLY | O_BINARY);
+                    data_size = get_file_size(relative_filename);
                     g_free(relative_filename);
                 }
                 else
                 {
                     file = open(filename, O_RDONLY | O_BINARY);
+                    data_size = get_file_size(filename);
                 }
 
-                data_size = lseek(file, 0, SEEK_END);
-                lseek(file, 0, SEEK_SET);
-
+                printf("Configurable: Inserting %lld bytes of data in memory region %s\n", data_size, name);
                 g_assert(data_size <= size); //Size of data to put into a RAM region needs to fit in the RAM region
 
                 data = g_malloc(data_size);
