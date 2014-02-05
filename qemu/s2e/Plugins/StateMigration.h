@@ -41,6 +41,7 @@ class StateMigration : public Plugin
 				uint32_t dst_regs[16]);
 		bool setRegsToState(S2EExecutionState *state,
 				uint32_t src_regs[16]);
+		uint32_t getChecksum(S2EExecutionState* state, uint32_t addr, uint32_t len);
 		S2E *m_s2e;
 };
 

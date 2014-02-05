@@ -154,6 +154,26 @@ void StateMigration::resumeExecution(S2EExecutionState* state)
 	m_remoteMemory->getInterface()->submitAndWait(state, request, response);
 }
 
+uint32_t StateMigration::getChecksum(S2EExecutionState* state,
+		uint32_t address,
+		uint32_t size)
+{
+	json::Object request;
+	json::Object params;
+	std::tr1::shared_ptr<json::Object> response;
+
+	printf("[StateMigration]: send checksum request\n");
+	request.Insert(json::Object::Member("cmd", json::String("get_checksum")));
+	params.Insert(json::Object::Member("address", json::String(intToHex(address))));
+	params.Insert(json::Object::Member("size", json::String(intToHex(size))));
+	request.Insert(json::Object::Member("params", params));
+	m_remoteMemory->getInterface()->submitAndWait(state, request, response);
+	json::String &value = (*response)["value"];
+	uint32_t ret = (uint32_t)strtol((static_cast<std::string>(value)).c_str(), NULL, 16);
+	printf("[StateMigration]: got checksum: 0x%08x\n", ret);
+	return ret;
+}
+
 bool StateMigration::getRegsFromState(S2EExecutionState *state,
 				uint32_t dst_regs[16])
 {
@@ -232,7 +252,10 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 	printf("[StateMigration]: start\n");
 	/* migrate crc table */
 	printf("[StateMigration]: migrate crc table\n");
+	uint8_t crc = getChecksum(state, 0x1004f400, 256);
 	copyToDevice(state, 0x1004f400, 256);
+	printf("[StateMigration]: crc of crc table is 0x%04hhx\n", crc);
+
 	/* migrate some stack */
 	uint32_t sp = regs[13];
 	printf("[StateMigration]: migrate some stack: 0x%08x\n", sp);
