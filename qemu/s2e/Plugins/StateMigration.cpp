@@ -97,16 +97,26 @@ bool StateMigration::copyToDevice(S2EExecutionState* state,
 	return ret;
 }
 
-void StateMigration::putBreakPoint(S2EExecutionState *state, uint64_t addr)
+uint32_t StateMigration::writeMemoryBe_32(S2EExecutionState *state, uint64_t addr, const uint32_t val)
 {
-	const uint32_t brk_isn = 0xe1200472;
+	uint32_t old_data;
+	old_data = m_remoteMemory->getInterface()->readMemory(state, addr, 4);
 	for (int i = 3; i >= 0; --i) {
 		/* XXX: write big endian */
-		m_remoteMemory->getInterface()->writeMemory(state, addr+(3-i), 1, (uint64_t)(0xff & (brk_isn >> (8*i))));
+		m_remoteMemory->getInterface()->writeMemory(state, addr+(3-i), 1, (uint64_t)(0xff & (val >> (8*i))));
 	}
 	m_remoteMemory->getInterface()->readMemory(state, addr, 4);
+	return old_data;
+}
+
+uint32_t StateMigration::putBreakPoint(S2EExecutionState *state, uint64_t addr)
+{
+	const uint32_t brk_isn = 0xe1200472;
+	uint32_t ret;
+	ret = writeMemoryBe_32(state, addr, brk_isn);
 	printf("[StateMigration]: done inserting the breakpoint at 0x%08lx\n",
 			addr);
+	return ret;
 }
 
 bool StateMigration::transferStateToDevice(S2EExecutionState *state,
@@ -318,7 +328,7 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 	uint64_t data_len = m_end_pc - m_start_pc + 4; /* including last instruction */
 	copyToDevice(state, pc, data_len);
 	/* TODO: backup instruction */
-	putBreakPoint(state, pc+data_len-4);
+	uint32_t old_isn = putBreakPoint(state, pc+data_len-4);
 #endif
 
 #if 0
@@ -378,6 +388,8 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 	transferStateFromDevice(state, regs);
 	printf("[StateMigration]: done\n");
 	setRegsToState(state, regs);
+	/* restore instruction */
+	writeMemoryBe_32(state, pc+data_len-4, old_isn);
 	getRegsFromState(state, regs);
 	printf("[StateMigration]: resuming @0x%08x\n", regs[15]);
 
