@@ -50,9 +50,35 @@ bool StateMigration::copyToDevice(S2EExecutionState* state,
 {
 	uint8_t *data = (uint8_t *)malloc(len);
 	bool ret = state->readMemoryConcrete(addr, data, len);
+	uint8_t local_crc = CRC::crc_calc_buf(data, len);
+	uint8_t remote_crc = getRemoteChecksum(state, addr, len);
+	bool should_copy = false;
 
 	printf("[StateMigration]: copying %d bytes from emulator to "
 			"device from 0x%08lx\n", len, addr);
+
+	if (len > 4) {
+		if (local_crc != remote_crc) {
+			should_copy = true;
+		} else {
+			/* crc the same, reduce probability of collision by
+			 * computing the CRC for half of the buffer
+			 */
+			int mid = len/2;
+			if (CRC::crc_calc_buf(data, mid) !=
+					getRemoteChecksum(state, addr, mid))
+				should_copy = true;
+			else if (CRC::crc_calc_buf(&data[mid], len-mid) !=
+					getRemoteChecksum(state, addr+mid, len-mid))
+				should_copy = true;
+		}
+	}
+
+	if (!should_copy) {
+		printf("[StateMigration]: DO not copy!\n");
+		return false;
+	} else
+		printf("[StateMigration]: DO copy!\n");
 
 	for (int i = 0; i < len; i += 4) {
 		uint64_t x = 0;
@@ -154,7 +180,24 @@ void StateMigration::resumeExecution(S2EExecutionState* state)
 	m_remoteMemory->getInterface()->submitAndWait(state, request, response);
 }
 
-uint32_t StateMigration::getChecksum(S2EExecutionState* state,
+uint32_t StateMigration::getEmulatorChecksum(S2EExecutionState* state,
+		uint32_t addr,
+		uint32_t len)
+{
+	uint8_t *data = (uint8_t *)malloc(len);
+	bool ret = state->readMemoryConcrete(addr, data, len);
+	uint8_t crc;
+	if (!ret) {
+		printf("[StateMigration]: failed to get crc\n");
+		return 0;
+	}
+	crc = CRC::crc_calc_buf(data, len);
+	free(data);
+	printf("[StateMigration]: local checksum: %08hhx\n", crc);
+	return crc;
+}
+
+uint32_t StateMigration::getRemoteChecksum(S2EExecutionState* state,
 		uint32_t address,
 		uint32_t size)
 {
@@ -252,9 +295,16 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 	printf("[StateMigration]: start\n");
 	/* migrate crc table */
 	printf("[StateMigration]: migrate crc table\n");
-	uint8_t crc = getChecksum(state, 0x1004f400, 256);
+	/*
+	uint8_t remote_crc = getRemoteChecksum(state, 0x1004f400, 256);
+	uint8_t local_crc = getEmulatorChecksum(state, 0x1004f400, 256);
+
+	printf("[StateMigration]: remote crc: 0x%04hhx\n", remote_crc);
+	printf("[StateMigration]: local crc: 0x%04hhx\n", local_crc);
+	*/
+
+	//assert(0);
 	copyToDevice(state, 0x1004f400, 256);
-	printf("[StateMigration]: crc of crc table is 0x%04hhx\n", crc);
 
 	/* migrate some stack */
 	uint32_t sp = regs[13];
