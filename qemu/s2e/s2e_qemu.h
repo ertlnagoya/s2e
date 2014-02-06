@@ -348,7 +348,7 @@ uint64_t tcg_llvm_fork_and_concretize(uint64_t value,
 void tcg_llvm_trace_memory_access(uint64_t vaddr, uint64_t haddr,
                                   uint64_t value, uint32_t bits,
                                   uint8_t isWrite, uint8_t isIo);
-int tcg_llvm_hijack_memory_access(uint64_t vaddr, uint64_t haddr,
+void tcg_llvm_hijack_memory_access(uint64_t vaddr, uint64_t haddr,
                                   uint64_t* value, uint32_t bits,
                                   uint8_t isWrite, uint8_t isIo, uint8_t isCode, uint8_t* do_hijack);
 void tcg_llvm_trace_port_access(uint64_t port, uint64_t value,

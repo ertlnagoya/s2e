@@ -103,12 +103,22 @@ void TestCaseGenerator::onTestCaseGeneration(S2EExecutionState *state, const std
         ss << std::setfill(' ') << ", ";
 
         if (vp.second.size() == sizeof(int32_t)) {
+#ifdef TARGET_WORDS_BIGENDIAN
+            int32_t valueAsInt = vp.second[3] | ((int32_t)vp.second[2] << 8) | ((int32_t)vp.second[1] << 16) | ((int32_t)vp.second[0] << 24);
+#else
             int32_t valueAsInt = vp.second[0] | ((int32_t)vp.second[1] << 8) | ((int32_t)vp.second[2] << 16) | ((int32_t)vp.second[3] << 24);
+#endif
             ss << "(int32_t) " << valueAsInt << ", ";
         }
         if (vp.second.size() == sizeof(int64_t)) {
+#ifdef TARGET_WORDS_BIGENDIAN
+            int64_t valueAsInt = vp.second[7] | ((int64_t)vp.second[6] <<  8) | ((int64_t)vp.second[5] << 16) | ((int64_t)vp.second[4] << 24) |
+                            ((int64_t)vp.second[3] << 32) | ((int64_t)vp.second[2] << 40) | ((int64_t)vp.second[1] << 48) | ((int64_t)vp.second[0] << 56);
+#else
             int64_t valueAsInt = vp.second[0] | ((int64_t)vp.second[1] <<  8) | ((int64_t)vp.second[2] << 16) | ((int64_t)vp.second[3] << 24) |
-                ((int64_t)vp.second[4] << 32) | ((int64_t)vp.second[5] << 40) | ((int64_t)vp.second[6] << 48) | ((int64_t)vp.second[7] << 56);
+                            ((int64_t)vp.second[4] << 32) | ((int64_t)vp.second[5] << 40) | ((int64_t)vp.second[6] << 48) | ((int64_t)vp.second[7] << 56);
+#endif
+
             ss << "(int64_t) " << valueAsInt << ", ";
         }
 
