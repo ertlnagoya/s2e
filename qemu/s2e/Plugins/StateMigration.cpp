@@ -92,6 +92,8 @@ bool StateMigration::copyToDevice(S2EExecutionState* state,
 	m_remoteMemory->getInterface()->readMemory(state, addr+len-4, 4);
 	printf("[StateMigration]: done copying data to device\n");
 
+	free(data);
+
 	return ret;
 }
 
