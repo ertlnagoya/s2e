@@ -171,8 +171,8 @@ bool StateMigration::transferStateFromDevice(S2EExecutionState *state,
 		printf("got val for %s->%08x\n", ss.str().c_str(), dst_regs[i]);
 	}
 	json::String &value = (*response)["cpu_state_pc"];
-	printf("got val for %s->%08x\n", "pc", dst_regs[15]);
 	dst_regs[15] = strtol((static_cast<std::string>(value)).c_str(), NULL, 16);
+	printf("got val for %s->%08x\n", "pc", dst_regs[15]);
 
 	printf("[StateMigration]: done transfering registers\n");
 #endif
@@ -268,11 +268,12 @@ bool StateMigration::setRegsToState(S2EExecutionState *state,
 #ifdef TARGET_ARM
 #define CPU_NB_REGS 16
 #endif
-	for (int i = 0; i < CPU_NB_REGS - 1; i++) {
+	for (int i = 0; i < CPU_NB_REGS-1; i++) {
 		state->writeCpuRegisterConcrete(CPU_REG_OFFSET(i),
 				&src_regs[i],
 				CPU_REG_SIZE);
 	}
+	state->setPc(src_regs[15]);
 	return true;
 }
 
