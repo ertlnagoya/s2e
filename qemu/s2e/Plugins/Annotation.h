@@ -302,6 +302,9 @@ public:
     int activateRule(lua_State *L);
     int isReturn(lua_State *L);
     int isCall(lua_State *L);
+    int printDebug(lua_State* L);
+    int printMessage(lua_State* L);
+    int printWarning(lua_State* L);
 
     int setValue(lua_State *L);
     int getValue(lua_State *L);

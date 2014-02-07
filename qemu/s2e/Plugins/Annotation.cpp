@@ -304,8 +304,8 @@ void Annotation::onDataMemoryAccess(S2EExecutionState *state,
 
             lua_getglobal(L, itr->annotation.c_str());
 
-            Lunar<LUAAnnotation>::push(L, &luaAnnotation);
             Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
+            Lunar<LUAAnnotation>::push(L, &luaAnnotation);
             lua_pushnumber(L, address);
             lua_pushnumber(L, width / 8);
             lua_pushnumber(L, concreteValue);
@@ -609,6 +609,9 @@ Lunar<LUAAnnotation>::RegType LUAAnnotation::methods[] = {
   LUNAR_DECLARE_METHOD(LUAAnnotation, isCall),
   LUNAR_DECLARE_METHOD(LUAAnnotation, getValue),
   LUNAR_DECLARE_METHOD(LUAAnnotation, setValue),
+  LUNAR_DECLARE_METHOD(LUAAnnotation, printDebug),
+  LUNAR_DECLARE_METHOD(LUAAnnotation, printMessage),
+  LUNAR_DECLARE_METHOD(LUAAnnotation, printWarning),
   LUNAR_DECLARE_METHOD(LUAAnnotation, exit),
   {0,0}
 };
@@ -725,6 +728,30 @@ int LUAAnnotation::getValue(lua_State *L)
 
   lua_pushnumber(L, value);
   return 1;
+}
+
+int LUAAnnotation::printDebug(lua_State* L)
+{
+	std::string str = luaL_checkstring(L, 1);
+
+	g_s2e->getDebugStream() << "LUA annotation output: " << str << '\n';
+	return 0;
+}
+
+int LUAAnnotation::printMessage(lua_State* L)
+{
+	std::string str = luaL_checkstring(L, 1);
+
+	g_s2e->getMessagesStream() << "LUA annotation output: " << str << '\n';
+	return 0;
+}
+
+int LUAAnnotation::printWarning(lua_State* L)
+{
+	std::string str = luaL_checkstring(L, 1);
+
+	g_s2e->getWarningsStream() << "LUA annotation output: " << str << '\n';
+	return 0;
 }
 
 int LUAAnnotation::exit(lua_State *L)
