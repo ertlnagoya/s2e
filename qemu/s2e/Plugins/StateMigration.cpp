@@ -45,41 +45,55 @@ void StateMigration::slotTranslateBlockStart(ExecutionSignal *signal,
 	}
 }
 
+bool StateMigration::areTheBuffersInSync(S2EExecutionState *state,
+		uint64_t addr, uint32_t len)
+{
+	if (len <= 4)
+		return false;
+
+	uint8_t *data = (uint8_t *)malloc(len);
+	state->readMemoryConcrete(addr, data, len);
+	uint8_t local_crc = CRC::crc_calc_buf(data, len);
+	uint8_t remote_crc = getRemoteChecksum(state, addr, len);
+
+	if (local_crc != remote_crc) {
+		free(data);
+		return false;
+	} else {
+		/* crc the same, reduce probability of collision by
+		 * computing the CRC for half of the buffer
+		 */
+		int mid = len/2;
+		if (CRC::crc_calc_buf(data, mid) !=
+				getRemoteChecksum(state, addr, mid)) {
+			free(data);
+			return false;
+		} else if (CRC::crc_calc_buf(&data[mid], len-mid) !=
+				getRemoteChecksum(state, addr+mid, len-mid)) {
+			free(data);
+			return false;
+		}
+	}
+	free(data);
+	return true;
+}
+
 bool StateMigration::copyToDevice(S2EExecutionState* state,
 		uint64_t addr, uint32_t len)
 {
-	uint8_t *data = (uint8_t *)malloc(len);
-	bool ret = state->readMemoryConcrete(addr, data, len);
-	uint8_t local_crc = CRC::crc_calc_buf(data, len);
-	uint8_t remote_crc = getRemoteChecksum(state, addr, len);
-	bool should_copy = false;
+	bool should_copy = !areTheBuffersInSync(state, addr, len);
 
-	printf("[StateMigration]: copying %d bytes from emulator to "
-			"device from 0x%08lx\n", len, addr);
-
-	if (len > 4) {
-		if (local_crc != remote_crc) {
-			should_copy = true;
-		} else {
-			/* crc the same, reduce probability of collision by
-			 * computing the CRC for half of the buffer
-			 */
-			int mid = len/2;
-			if (CRC::crc_calc_buf(data, mid) !=
-					getRemoteChecksum(state, addr, mid))
-				should_copy = true;
-			else if (CRC::crc_calc_buf(&data[mid], len-mid) !=
-					getRemoteChecksum(state, addr+mid, len-mid))
-				should_copy = true;
-		}
-	}
+	//printf("[StateMigration]: copying %d bytes from emulator to "
+	//		"device from 0x%08lx\n", len, addr);
 
 	if (!should_copy) {
-		printf("[StateMigration]: DO not copy!\n");
+		printf("[StateMigration]: copy_to_device: DO not copy!\n");
 		return false;
 	} else
-		printf("[StateMigration]: DO copy!\n");
+		printf("[StateMigration]: copy_to_device: DO copy!\n");
 
+	uint8_t *data = (uint8_t *)malloc(len);
+	bool ret = state->readMemoryConcrete(addr, data, len);
 	for (int i = 0; i < len; i += 4) {
 		uint64_t x = 0;
 		x = data[i];
@@ -90,8 +104,31 @@ bool StateMigration::copyToDevice(S2EExecutionState* state,
 	}
 	/* issue a dummy read for flushing the writes */
 	m_remoteMemory->getInterface()->readMemory(state, addr+len-4, 4);
-	printf("[StateMigration]: done copying data to device\n");
+	//printf("[StateMigration]: done copying data to device\n");
 
+	free(data);
+
+	return ret;
+}
+
+bool StateMigration::copyFromDevice(S2EExecutionState* state,
+		uint64_t addr, uint32_t len)
+{
+	bool ret;
+	bool should_copy = !areTheBuffersInSync(state, addr, len);
+	//printf("[StateMigration]: copy from device \n");
+
+	if (!should_copy) {
+		printf("[StateMigration]: copy_from_device: DO not copy!\n");
+		return false;
+	} else
+		printf("[StateMigration]: copy_from_device: DO copy!\n");
+
+	uint8_t *data = (uint8_t *)malloc(len);
+	for (int i = 0; i < len; ++i)
+		data[i] = m_remoteMemory->getInterface()->readMemory(state, addr+i, 1);
+
+	ret = state->writeMemoryConcrete(addr, data, len);
 	free(data);
 
 	return ret;
@@ -288,6 +325,7 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 	 */
 	/* XXX: asume ARM code */
 	uint32_t regs[16];
+	uint32_t old_regs[16];
 
 #if 0
 	if (m_verbose) {
@@ -303,11 +341,14 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 	}
 #endif
 
+#define STACK_SIZE 256
+
 	getRegsFromState(state, regs);
+	memcpy(old_regs, regs, sizeof old_regs);
 
 	printf("[StateMigration]: start\n");
 	/* migrate crc table */
-	printf("[StateMigration]: migrate crc table\n");
+	printf("[StateMigration]: migrate some data\n");
 	/*
 	uint8_t remote_crc = getRemoteChecksum(state, 0x1004f400, 256);
 	uint8_t local_crc = getEmulatorChecksum(state, 0x1004f400, 256);
@@ -322,10 +363,10 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 	/* migrate some stack */
 	uint32_t sp = regs[13];
 	printf("[StateMigration]: migrate some stack: 0x%08x\n", sp);
-	copyToDevice(state, sp-1024, 1024);
+	copyToDevice(state, sp, STACK_SIZE);
 #if 1
 	/* migrate code */
-	printf("[StateMigration]: migrate code\n");
+	printf("[StateMigration]: migrate some code\n");
 	uint64_t data_len = m_end_pc - m_start_pc + 4; /* including last instruction */
 	copyToDevice(state, pc, data_len);
 	/* TODO: backup instruction */
@@ -387,12 +428,42 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 
 	printf("[StateMigration]: transfering state from device\n");
 	transferStateFromDevice(state, regs);
-	printf("[StateMigration]: done\n");
+	/* fixup for stack pointer, we don't want to smash the stack */
+	/* we should restore r4-r7, r10, r11 */
+	/* basically, we're emulating the instruction that has been replaced
+	 */
+
+	/*
+	regs[13] += 28;
+	regs[4] = old_regs[4];
+	regs[5] = old_regs[5];
+	regs[6] = old_regs[6];
+	regs[7] = old_regs[7];
+	regs[10] = old_regs[10];
+	regs[11] = old_regs[11];
+	for (int i = 0; i < 16; ++i) {
+		printf("%08x ", regs[i]);
+	}
+	printf("\n");
+	*/
+
+	/* can we do the fixup by decrementing the PC */
+	//regs[15] -= 4;
+	//printf("%08x %08lx\n", regs[15], pc+data_len-4);
+	//assert(regs[15] == pc+data_len-4);
+	uint32_t new_sp = regs[13];
+	//regs[15] = 0x12610;
+	//regs[15] = 0xABCD0000;
 	setRegsToState(state, regs);
+	printf("[StateMigration]: migrate some stack back\n");
+	copyFromDevice(state, new_sp, STACK_SIZE);
 	/* restore instruction */
 	writeMemoryBe_32(state, pc+data_len-4, old_isn);
 	getRegsFromState(state, regs);
+	/* migrate back the stack */
 	printf("[StateMigration]: resuming @0x%08x\n", regs[15]);
+	throw CpuExitException();
+	//assert(0);
 
 	/* This is a test */
 # if 0
