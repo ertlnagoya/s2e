@@ -406,6 +406,7 @@ Lunar<S2ELUAExecutionState>::RegType S2ELUAExecutionState::methods[] = {
   LUNAR_DECLARE_METHOD(S2ELUAExecutionState, writeParameter),
   LUNAR_DECLARE_METHOD(S2ELUAExecutionState, writeMemorySymb),
   LUNAR_DECLARE_METHOD(S2ELUAExecutionState, readMemory),
+  LUNAR_DECLARE_METHOD(S2ELUAExecutionState, readMemoryConcretized),
   LUNAR_DECLARE_METHOD(S2ELUAExecutionState, writeMemory),
   LUNAR_DECLARE_METHOD(S2ELUAExecutionState, isSpeculative),
   LUNAR_DECLARE_METHOD(S2ELUAExecutionState, getID),
@@ -630,6 +631,26 @@ int S2ELUAExecutionState::readMemory(lua_State *L)
         bswap((uint8_t *)&ret, size);
 #endif
     lua_pushnumber(L, ret);        /* first result */
+    return 1;
+}
+
+int S2ELUAExecutionState::readMemoryConcretized(lua_State *L)
+{
+	target_ulong address = luaL_checkint(L, 1);
+	uint32_t size = luaL_checkint(L, 2);
+
+	target_ulong ret;
+	size = size > sizeof (ret) ? sizeof (ret) : size;
+
+	klee::ref<klee::Expr> v = m_state->readMemory(address, size * 8, S2EExecutionState::VirtualAddress);
+
+	if (isa<klee::ConstantExpr>(v))
+	{
+		lua_pushnumber(L, cast<klee::ConstantExpr>(v)->getZExtValue());
+		return 1;
+	}
+
+	lua_pushnumber(L, g_s2e->getExecutor()->toConstantSilent(*m_state, v)->getZExtValue());
     return 1;
 }
 
