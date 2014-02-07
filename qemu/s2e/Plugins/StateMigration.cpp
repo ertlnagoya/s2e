@@ -124,9 +124,16 @@ bool StateMigration::copyFromDevice(S2EExecutionState* state,
 	} else
 		printf("[StateMigration]: copy_from_device: DO copy!\n");
 
+	assert(len % 4 == 0);
 	uint8_t *data = (uint8_t *)malloc(len);
-	for (int i = 0; i < len; ++i)
-		data[i] = m_remoteMemory->getInterface()->readMemory(state, addr+i, 1);
+	for (int i = 0; i < len; i += 4) {
+		uint64_t x;
+		x = m_remoteMemory->getInterface()->readMemory(state, addr+i, 4);
+		data[i+3] = (uint8_t)((x >> 0 ) & 0xff);
+		data[i+2] = (uint8_t)((x >> 8 ) & 0xff);
+		data[i+1] = (uint8_t)((x >> 16) & 0xff);
+		data[i+0] = (uint8_t)((x >> 24) & 0xff);
+	}
 
 	ret = state->writeMemoryConcrete(addr, data, len);
 	free(data);
