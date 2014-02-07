@@ -312,8 +312,8 @@ namespace s2e
                             && "Read handler must be set in MemoryInterceptorAnnotation configuration when read is allowed");
 
             lua_getglobal(L, m_readHandler.c_str());
-            Lunar<LUAAnnotation>::push(L, &luaAnnotation);
             Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
+            Lunar<LUAAnnotation>::push(L, &luaAnnotation);
             lua_pushnumber(L, address);
             lua_pushnumber(L, size / 8);
             lua_pushboolean(L, is_io);
@@ -437,8 +437,8 @@ namespace s2e
                             && "Write handler must be set in MemoryInterceptorAnnotation configuration when read is allowed");
 
             lua_getglobal(L, m_writeHandler.c_str());
-            Lunar<LUAAnnotation>::push(L, &luaAnnotation);
             Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
+            Lunar<LUAAnnotation>::push(L, &luaAnnotation);
             lua_pushnumber(L,
                     cast < klee::ConstantExpr > (virtaddr)->getZExtValue());
             lua_pushnumber(L, value->getWidth() / 8);
