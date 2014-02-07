@@ -708,6 +708,10 @@ for opt do
   ;;
   --enable-address-sanitizer) address_sanitizer="yes"
   ;;
+  --enable-s2e-python) s2e_python="yes"
+  ;;
+  --disable-s2e-python) s2e_python="no"
+  ;;
   --enable-sparse) sparse="yes"
   ;;
   --disable-sparse) sparse="no"
@@ -2277,6 +2281,99 @@ EOF
   fi
 fi
 
+#######################################
+# s2e-python probe: python libraries
+
+PYTHONLIBS_LIST="-lpython3 -lpython3.2 -lpython3.3 -lpython3.4"
+
+if test "$s2e" != "no" && test "$s2e_python" == "yes"; then
+  #First test for header files
+  cat > $TMPCXX << EOF
+extern "C" {
+#include <Python.h>
+int main(int argc, char ** argv) {return 0;}}
+EOF
+  if ! compile_prog_cxx "" ""; then
+  	echo "WARNING: Python headers not found. Add python include directory to '--extra-cxxflags' if you want this feature. Silently disabling feature s2e-python."
+    pythonlib=no
+  else
+    #Look for python library    
+      cat > $TMPCXX << EOF
+extern "C" {
+#include <Python.h>
+int main(int argc, char ** argv) {Py_Initialize(); return 0;}}
+EOF
+    pythonlib=no
+    for python_lib in ${PYTHONLIBS_LIST}; do
+      if compile_prog_cxx "" "${python_lib}" ; then
+        LIBS="${python_lib} ${LIBS}"
+  	    pythonlib=yes
+  	    pythonlib_name="${python_lib}"
+  	    break
+      fi
+    done
+    if [ x"${pythonlib}" == xno ]; then
+      echo "WARNING: Python libraries not found. Add python library directory to '--extra-ldflags' if you want this feature. Silently disabling feature s2e-python."
+    fi
+  fi
+  
+  #Test python library version
+  cat > $TMPCXX << EOF
+extern "C" {
+#include <Python.h>
+#if PY_VERSION_HEX < 0x03000000
+#error  s2e-python requires Python 3.0 or higher
+#endif
+int main(int argc, char ** argv) {return 0;}}
+EOF
+  if ! compile_prog_cxx "" ""; then
+  	echo "WARNING: Python header version is wrong. Version 3.0 or higher required. Silently disabling feature s2e-python."
+    pythonlib=no
+  fi
+fi  
+
+
+###########################################
+#s2e-python probe: boost-python
+
+BOOST_PYTHONLIBS_LIST="-lboost_python3 -lboost_python3-mt -lboost_python-py32 -lboost_python-py33 -lboost_python-py34"
+
+if test "$s2e" != "no" && test "$s2e_python" == "yes" && test x"${pythonlib}" == xyes; then
+  #Check for boost-python headers
+  cat > $TMPCXX << EOF
+#include <boost/python.hpp>
+int main(int argc, char ** argv) {return 0;}
+EOF
+  if compile_prog_cxx "-Wno-unknown-pragmas -Wno-undef" "${pythonlib_name}"; then
+    #Check for boost-python library
+    cat > $TMPCXX << EOF
+#include <boost/python.hpp>
+int main(int argc, char ** argv) {Py_Initialize(); boost::python::eval("4 == 4"); return 0;}
+EOF
+    boost_pythonlib=no
+    for boost_python_lib in ${BOOST_PYTHONLIBS_LIST}; do
+      if compile_prog_cxx "-Wno-unknown-pragmas -Wno-undef" "${boost_python_lib} ${pythonlib_name}"; then
+        LIBS="${LIBS} ${boost_python_lib}"
+        boost_pythonlib=yes
+        break
+      fi
+    done
+    if [ x"${boost_pythonlib}" == xno ]; then
+      echo "WARNING: boost-python libraries not found. Add boost-python library directory to '--extra-ldflags' if you want this feature. Silently disabling feature s2e-python."
+    fi
+    
+    #TODO: Run compiled program to see that linkage is correct
+#    if [ -f "${TMPE}" ] && "${TMPE}"; then
+#      boost_pythonlib=no
+#      echo "WARNING: There seems to be something wrong with the python and boost-python libraries. Verify that they are using the same versions. Silently disabling feature s2e-python."
+#      exit 1
+#    fi
+  else
+    echo "WARNING: boost-python header not found. Add boost-python include directory to '--extra-cxxflags' if you want this feature. Silently disabling feature s2e-python."
+    boost_pythonlib=no
+  fi
+fi  
+
 ##########################################
 # libcap probe
 
@@ -3085,6 +3182,12 @@ fi
 # End of CC checks
 # After here, no more $cc or $ld runs
 
+if test "$s2e_python" == "yes" && test "$pythonlib" = "yes" && test "$boost_pythonlib" = "yes"; then
+  s2e_python=yes
+else
+  s2e_python=no
+fi
+
 if test "$debug" = "no" ; then
   CFLAGS="-O2 $CFLAGS"
 else
@@ -3272,6 +3375,7 @@ echo "usb net redir     $usb_redir"
 echo "OpenGL support    $opengl"
 echo "libiscsi support  $libiscsi"
 echo "build guest agent $guest_agent"
+echo "s2e-python support ${s2e_python}" 
 echo "coroutine backend $coroutine_backend"
 
 if test "$sdl_too_old" = "yes"; then
