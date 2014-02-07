@@ -36,18 +36,22 @@
 #ifndef S2E_PLUGINS_MEMORY_INTERCEPTOR_H
 #define S2E_PLUGINS_MEMORY_INTERCEPTOR_H
 
+#include <list>
+
 #include <s2e/Plugin.h>
 #include <s2e/Plugins/CorePlugin.h>
 #include <s2e/S2EExecutionState.h>
 #include <s2e/Plugins/MemoryAccess.h>
 
+
+
 namespace s2e {
 namespace plugins {
 
-class MemoryInterceptorListener
+class MemoryAccessHandler
 {
 public:
-    MemoryInterceptorListener(S2E* s2e, uint64_t address, uint64_t size, uint64_t mask)
+	MemoryAccessHandler(S2E* s2e, uint64_t address, uint64_t size, uint64_t mask)
         : m_s2e(s2e),
           m_address(address),
           m_size(size),
@@ -87,7 +91,7 @@ public:
     {
         return false;
     }
-    virtual ~MemoryInterceptorListener() {}
+    virtual ~MemoryAccessHandler() {}
 protected:
     S2E* m_s2e;
     uint64_t m_address;
@@ -112,13 +116,14 @@ public:
             klee::ref<klee::Expr> value,
             bool isIO);
     void initialize();
-    void addInterceptor(MemoryInterceptorListener * listener);
+    void addInterceptor(MemoryAccessHandler* handler);
+    void removeInterceptor(MemoryAccessHandler* handler);
 //    void registerInterceptors();
 
 private:
     bool m_readInterceptorRegistered;
     bool m_writeInterceptorRegistered;
-    std::vector< MemoryInterceptorListener* > m_listeners;
+    std::list< MemoryAccessHandler* > m_listeners;
     bool m_verbose;
 
 };

@@ -135,7 +135,7 @@ klee::ref<klee::Expr> MemoryInterceptor::slotMemoryRead(S2EExecutionState *state
                 << '\n';
     }
 
-    for (std::vector< MemoryInterceptorListener* >::iterator listener_itr = this->m_listeners.begin();
+    for (std::list< MemoryAccessHandler* >::iterator listener_itr = this->m_listeners.begin();
          listener_itr != this->m_listeners.end();
          listener_itr++)
     {
@@ -212,7 +212,7 @@ bool MemoryInterceptor::slotMemoryWrite(S2EExecutionState *state,
             << '\n';
     }
 
-    for (std::vector< MemoryInterceptorListener* >::iterator listener_itr = this->m_listeners.begin();
+    for (std::list<  MemoryAccessHandler* >::iterator listener_itr = this->m_listeners.begin();
          listener_itr != this->m_listeners.end();
          listener_itr++)
     {
@@ -234,10 +234,10 @@ bool MemoryInterceptor::slotMemoryWrite(S2EExecutionState *state,
     return false;
 }
 
-void MemoryInterceptor::addInterceptor(MemoryInterceptorListener * listener)
+void MemoryInterceptor::addInterceptor(MemoryAccessHandler* listener)
 {
     //TODO: Check that there is no intersection with an already added plugin
-    for (std::vector< MemoryInterceptorListener* >::const_iterator itr = m_listeners.begin();
+    for (std::list< MemoryAccessHandler* >::const_iterator itr = m_listeners.begin();
          itr != m_listeners.end();
          itr++)
     {
@@ -255,7 +255,7 @@ void MemoryInterceptor::addInterceptor(MemoryInterceptorListener * listener)
              (listener->getAccessMask() & (*itr)->getAccessMask()) != 0)
         {
             s2e()->getWarningsStream()
-                    << "Trying to add memory interceptor handler for address range "
+                    << "Trying to add memory access handler for address range "
                     << hexval(listener->getAddress()) << "-"
                     << hexval(listener->getAddress()  + listener->getSize())
                     << " (access " << hexval(listener->getAccessMask())
@@ -280,6 +280,12 @@ void MemoryInterceptor::addInterceptor(MemoryInterceptorListener * listener)
         s2e()->getCorePlugin()->onHijackMemoryWrite.connect(sigc::mem_fun(*this, &MemoryInterceptor::slotMemoryWrite));
         m_writeInterceptorRegistered = true;
     }
+}
+
+void MemoryInterceptor::removeInterceptor(MemoryAccessHandler* listener)
+{
+	//TODO: implement
+	assert(false);
 }
 
 

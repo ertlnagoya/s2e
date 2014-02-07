@@ -78,7 +78,7 @@ private:
     bool m_verbose;
 };
     
-class RemoteMemoryListener : public MemoryInterceptorListener
+class RemoteMemoryListener : public MemoryAccessHandler
 {
 public:
     RemoteMemoryListener(S2E* s2e, RemoteMemoryInterface* remoteMemoryIf, uint64_t address, uint64_t size, uint64_t mask);

@@ -56,7 +56,7 @@ private:
     bool m_verbose;
 };
 
-class MemoryInterceptorAnnotationHandler : public MemoryInterceptorListener
+class MemoryInterceptorAnnotationHandler : public MemoryAccessHandler
 {
 public:
     MemoryInterceptorAnnotationHandler(

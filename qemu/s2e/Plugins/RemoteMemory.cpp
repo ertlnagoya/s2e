@@ -441,7 +441,7 @@ RemoteMemoryListener::RemoteMemoryListener(
         uint64_t address,
         uint64_t size,
         uint64_t mask)
-        : MemoryInterceptorListener(s2e, address, size, mask),
+        : MemoryAccessHandler(s2e, address, size, mask),
           m_remoteMemoryIf(remoteMemoryIf)
 {
 }

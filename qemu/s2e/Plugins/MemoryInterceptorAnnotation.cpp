@@ -287,7 +287,7 @@ namespace s2e
         MemoryInterceptorAnnotationHandler::MemoryInterceptorAnnotationHandler(
                 S2E* s2e, uint64_t address, uint64_t size, int mask,
                 std::string read_handler, std::string write_handler) 
-            : MemoryInterceptorListener(s2e, address, size, mask),
+            : MemoryAccessHandler(s2e, address, size, mask),
               m_readHandler(read_handler), 
               m_writeHandler(write_handler)
         {
