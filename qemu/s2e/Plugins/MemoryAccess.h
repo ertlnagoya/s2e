@@ -25,4 +25,10 @@ static const int ACCESS_TYPE_SIZE_ANY = ACCESS_TYPE_SIZE_1
 		| ACCESS_TYPE_SIZE_8
 		| ACCESS_TYPE_SIZE_16;
 
+#define BITSIZE_TO_ACCESS_TYPE_SIZE(x) \
+	(((x) << 9) & 0x1f000)
+
+#define BYTESIZE_TO_ACCESS_TYPE_SIZE(x) \
+	(((x) << 12) & 0x1f000)
+
 #endif /* _S2E_PLUGINS_MEMORYACCESS_H */
