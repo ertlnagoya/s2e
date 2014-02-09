@@ -207,6 +207,8 @@ public:
     /* Runtime information */
     S2EExecutor* getExecutor() { return m_s2eExecutor; }
 
+    void registerPlugin(const PluginInfo* info) {m_pluginsFactory->registerPlugin(info);}
+
     //XXX: A plugin can hold cached state information. When a state is deleted,
     //remove all the cached info from all plugins.
     void refreshPlugins();

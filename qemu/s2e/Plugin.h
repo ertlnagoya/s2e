@@ -125,7 +125,10 @@ struct PluginInfo {
     std::string configKey;
 
     /** A function to create a plugin instance */
-    Plugin* (*instanceCreator)(S2E*);
+    Plugin* (*instanceCreator)(S2E*, void *);
+
+    /** A pointer that can be set and that is passed to the initialize function of the plugin */
+    void* opaque;
 };
 
 //typedef std::tr1::unordered_map<std::string, const PluginInfo*> PluginMap;
@@ -195,7 +198,7 @@ public:
     static CompiledPlugin s_##className(className::getPluginInfoStatic())
 
 template<class C>
-Plugin* _pluginCreatorHelper(S2E* s2e) { return new C(s2e); }
+Plugin* _pluginCreatorHelper(S2E* s2e, void* opaque) { return new C(s2e); }
 
 inline const std::string& Plugin::getConfigKey() const {
     return getPluginInfo()->configKey;

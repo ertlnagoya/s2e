@@ -40,17 +40,27 @@
 #include <s2e/Plugins/CorePlugin.h>
 #include <s2e/S2EExecutionState.h>
 
+#include <list>
+
+extern "C" {
+#include <Python.h>
+}
+
 namespace s2e {
 namespace plugins {
 
 class PythonInterface : public Plugin
 {
+//	friend static PyObject* register_plugin(PyObject*, PyObject*, PyObject*);
+
     S2E_PLUGIN
 public:
     PythonInterface(S2E* s2e): Plugin(s2e) {}
 
     void initialize();
+    std::list<PluginInfo> m_pluginInfo;
 private:
+
 };
 
 } // namespace plugins
