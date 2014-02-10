@@ -264,7 +264,19 @@ void MemoryInterceptor::addInterceptor(MemoryAccessHandler* listener)
                     << hexval((*itr)->getAddress()  + (*itr)->getSize())
                     << " (access " << hexval((*itr)->getAccessMask()) << "). "
                     << "Not adding new listener." << '\n';
+            assert(false);
         }
+    }
+
+    if (!(listener->getAccessMask() & ACCESS_TYPE_SIZE_ANY)) {
+    	s2e()->getWarningsStream()
+					<< "Trying to add memory access handler for address range "
+					<< hexval(listener->getAddress()) << "-"
+					<< hexval(listener->getAddress()  + listener->getSize())
+					<< " (access " << hexval(listener->getAccessMask())
+					<< ") without specifying any size that it should listen for."
+					<< "Not adding new listener." << '\n';
+    	assert(false);
     }
 
     m_listeners.push_back(listener);
