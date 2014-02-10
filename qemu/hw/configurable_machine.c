@@ -487,7 +487,7 @@ static void board_init(ram_addr_t ram_size,
                     data_size = get_file_size(filename);
                 }
 
-                printf("Configurable: Inserting %lld bytes of data in memory region %s\n", data_size, name);
+                printf("Configurable: Inserting %" PRIx64 " bytes of data in memory region %s\n", data_size, name);
                 g_assert(data_size <= size); //Size of data to put into a RAM region needs to fit in the RAM region
 
                 data = g_malloc(data_size);
