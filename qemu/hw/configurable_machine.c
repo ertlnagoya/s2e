@@ -72,7 +72,7 @@ static QDict * load_configuration(const char * filename)
         exit(1);
     }
 
-    printf("Trying to allocate %ld bytes\n", filesize);
+    printf("Trying to allocate %" PRId64 " bytes\n", filesize);
 
     filedata = g_malloc(filesize + 1);
 
@@ -425,7 +425,7 @@ static void board_init(ram_addr_t ram_size,
 
                 if (is_first_mapping)
                 {
-                    printf("Configurable: Adding memory region %s (size: 0x%lx) at address 0x%lx\n", name, size, address);
+                    printf("Configurable: Adding memory region %s (size: 0x%" PRIx64 ") at address 0x%" PRIx64 "\n", name, size, address);
                     memory_region_add_subregion(sysmem, address, ram);
                     is_first_mapping = FALSE;
 
@@ -443,7 +443,7 @@ static void board_init(ram_addr_t ram_size,
 
                     snprintf(alias_name, sizeof(alias_name), "%s.alias_%d", name, alias_num);
 
-                    printf("Configurable: Adding memory region %s (size: 0x%lx) at address 0x%lx\n", alias_name, size, address);
+                    printf("Configurable: Adding memory region %s (size: 0x%" PRIx64 ") at address 0x%" PRIx64 "\n", alias_name, size, address);
                     memory_region_init_alias(ram_alias, alias_name, ram, 0, size);
                     memory_region_add_subregion(sysmem, address, ram_alias);
 
@@ -499,7 +499,7 @@ static void board_init(ram_addr_t ram_size,
                 close(file);
 
                 //And copy the data to the memory, if it is initialized
-                printf("Configurable: Copying 0x%lx byte of data from file %s to address 0x%lx\n", data_size, filename, address);
+                printf("Configurable: Copying 0x%" PRIx64 " byte of data from file %s to address 0x%" PRIx64 "\n", data_size, filename, address);
 //                ram_ptr = qemu_get_ram_ptr(memory_region_get_ram_addr(ram));
 //                memcpy(ram_ptr, data, data_size);
 //                qemu_put_ram_ptr(ram_ptr);
