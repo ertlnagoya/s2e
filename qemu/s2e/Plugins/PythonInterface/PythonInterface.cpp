@@ -36,7 +36,7 @@
 //Has to be here, boost is picky about the header order
 //#include <boost/python.hpp>
 
-#include <s2e/Plugins/PythonInterface.h>
+#include <s2e/Plugins/PythonInterface/PythonInterface.h>
 
 #include <s2e/S2E.h>
 #include <s2e/ConfigFile.h>
@@ -128,130 +128,176 @@ S2E_DEFINE_PLUGIN(PythonInterface, "Interface plugin for developing plugins in P
 //	g_s2e->registerPlugin(&pythonPluginInfo.back());
 //}
 
-//BOOST_PYTHON_MODULE(s2e)
-//{
-//	class_<S2E, S2E*>("S2E", no_init)
-//	;
 
-//	class_<PluginWrapper>("Plugin", init<S2E*>())
-//	class_<PluginWrapper>("Plugin", no_init)
-//		.def("initialize", &Plugin::initialize)
-//		.def("getPluginInfo", pure_virtual(&Plugin::getPluginInfo))
-//		.def("getConfigKey", &Plugin::getConfigKey)
-//		.def("getPluginState", &Plugin::getPluginState)
-//	;
+static std::string getString(PyObject* str)
+{
+	PyObject* asciiString = PyUnicode_AsASCIIString(str);
+	std::string result(PyBytes_AsString(asciiString));
+	Py_DECREF(asciiString);
+	return result;
+}
 
-//	class_<PluginInfo>("PluginInfo", no_init)
-//		.def_readwrite("name", &PluginInfo::name)
-//		.def_readwrite("description", &PluginInfo::description)
-//		.def_readwrite("functionName", &PluginInfo::functionName)
-//		.def_readwrite("dependencies", &PluginInfo::dependencies)
-//		.def_readwrite("configKey", &PluginInfo::configKey)
-//		.def_readwrite("instanceCreator", &PluginInfo::instanceCreator)
-//	;
-//
-//	def("PythonS2E_registerPlugin", &registerPlugin);
-//}
+class PythonPluginWrapper : public Plugin
+{
+private:
+	PythonInterface* m_plugin;
+	PyObject* m_pyPlugin;
+public:
+	PythonPluginWrapper(PythonInterface* plugin, PyObject* pyPlugin)
+		: Plugin(plugin->s2e()),
+		  m_plugin(plugin),
+		  m_pyPlugin(pyPlugin)
+	{
+	}
+	virtual const PluginInfo* getPluginInfo() const;
+
+	virtual void initialize();
+};
 
 static Plugin* call_plugin_create(S2E* s2e, void* opaque)
 {
+	std::pair<PythonInterface*, PyObject*>* pointers = reinterpret_cast< std::pair< PythonInterface*, PyObject* >* >(opaque);
 	//TODO: stub
-	PyObject* callable = reinterpret_cast<PyObject *>(opaque);
+	PyObject* callable = pointers->second;
+	PythonInterface* plugin = pointers->first;
 	assert(PyCallable_Check(callable));
 	//TODO: Add parameter
-	PyObject_Call(callable, Py_None, Py_None);
+	PyObject* args = PyList_New(1);
+	PyList_SetItem(args, 0, plugin->m_s2e_instance);
+	PyObject* result = PyObject_Call(callable, args, Py_None);
 
-	return NULL;
+	Py_DECREF(args);
+	return new PythonPluginWrapper(plugin, result);
 }
 
-static PyObject* register_plugin(PyObject* self, PyObject* args, PyObject* kw)
+static PluginInfo* parsePluginInfo(PythonInterface* plugin, PyObject* dict)
 {
-	//TODO: Memory leaks on errors
-	char* name = NULL;
-	char* description = NULL;
-	char* functionName = NULL;
+	//TODO: Memory leaks
 	PyObject* pyDependencies = NULL;
-	char* configKey = NULL;
 	PyObject* pyInstanceCreator = NULL;
-	S2E* s2e = (*reinterpret_cast<PythonInterface**>(PyModule_GetState(self)))->s2e();
-	PythonInterface* plugin = *reinterpret_cast<PythonInterface**>(PyModule_GetState(self));
 	PluginInfo plgInfo;
 
-	static const char* kwlist[] = {
-		"name",
-		"instanceCreator",
-		"description",
-		"functionName",
-		"dependencies",
-		"configKey",
-		NULL
-	};
-	if (!PyArg_ParseTupleAndKeywords(
-			args,
-			kw,
-			"UO|UUO!U",
-			const_cast<char **>(kwlist),
-			&name,
-			&pyInstanceCreator,
-			&description,
-			&functionName,
-			&PyList_Type,
-			&pyDependencies,
-			&configKey))
-	{
+	assert(PyDict_Check(dict));
+
+	if (!PyDict_GetItemString(dict, "name")) {
+		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary must contain key 'name'");
 		return NULL;
 	}
 
-	if (!functionName)
-		functionName = name;
-	if (!configKey)
-		configKey = name;
-
-	if (!PySequence_Check(pyDependencies)) {
-		s2e->getWarningsStream()
-				<< "[PythonInterface] register_plugin called with parameter "
-				<< "dependencies which is not a list" << '\n';
-		PyErr_SetString(PyExc_TypeError, "register_plugin parameter dependencies needs to be a sequence");
+	if (!PyUnicode_Check(PyDict_GetItemString(dict, "name"))) {
+		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary must contain key 'name' with value of type unicode");
 		return NULL;
 	}
 
-	for (Py_ssize_t i = 0; i < PySequence_Size(pyDependencies); i++)
+	if (!PyDict_GetItemString(dict, "instanceCreator")) {
+		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary must contain key 'instanceCreator'");
+		return NULL;
+	}
+
+	if (!PyCallable_Check(PyDict_GetItemString(dict, "instanceCreator"))) {
+		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary must contain key 'instanceCreator' with value of type callable");
+		return NULL;
+	}
+
+	if (PyDict_GetItemString(dict, "description") && !PyUnicode_Check(PyDict_GetItemString(dict, "description"))) {
+		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary value of key 'description' must be unicode");
+		return NULL;
+	}
+
+	if (PyDict_GetItemString(dict, "configKey") && !PyUnicode_Check(PyDict_GetItemString(dict, "configKey"))) {
+		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary value of key 'configKey' must be unicode");
+		return NULL;
+	}
+
+	if (PyDict_GetItemString(dict, "functionName") && !PyUnicode_Check(PyDict_GetItemString(dict, "functionName"))) {
+		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary value of key 'functionName' must be unicode");
+		return NULL;
+	}
+
+	plgInfo.name = getString(PyDict_GetItemString(dict, "name"));
+	pyInstanceCreator = PyDict_GetItemString(dict, "instanceCreator");
+
+	if (PyDict_GetItemString(dict, "functionName"))
+		plgInfo.functionName = getString(PyDict_GetItemString(dict, "functionName"));
+	else
+		plgInfo.functionName = plgInfo.name;
+	if (PyDict_GetItemString(dict, "configKey"))
+		plgInfo.configKey = getString(PyDict_GetItemString(dict, "configKey"));
+	else
+		plgInfo.configKey = plgInfo.name;
+	if (PyDict_GetItemString(dict, "description"))
+			plgInfo.description = getString(PyDict_GetItemString(dict, "description"));
+
+	if (PyDict_GetItemString(dict, "dependencies"))
 	{
-		PyObject* item = PySequence_GetItem(pyDependencies, i);
-		if (!PyUnicode_Check(item)) {
-			s2e->getWarningsStream()
-					<< "[PythonInterface] register_plugin called with parameter "
-					<< "dependencies which is not a list of strings" << '\n';
-			PyErr_SetString(PyExc_TypeError, "register_plugin parameter dependencies needs to be a sequence or strings");
-			return NULL;
+		pyDependencies = PyDict_GetItemString(dict, "dependencies");
+		for (Py_ssize_t i = 0; i < PySequence_Size(pyDependencies); i++)
+		{
+			PyObject* item = PySequence_GetItem(pyDependencies, i);
+			if (!PyUnicode_Check(item)) {
+				PyErr_SetString(PyExc_TypeError, "register_plugin parameter dependencies needs to be a sequence or strings");
+				return NULL;
+			}
+
+			plgInfo.dependencies.push_back(getString(item));
 		}
-
-		PyObject* asciiString = PyUnicode_AsASCIIString(item);
-		plgInfo.dependencies.push_back(PyBytes_AsString(asciiString));
-		Py_DECREF(asciiString);
-		Py_DECREF(item);
 	}
 
 	if (std::find(plgInfo.dependencies.begin(), plgInfo.dependencies.end(), std::string("PythonInterface")) == plgInfo.dependencies.end())
 		plgInfo.dependencies.push_back("PythonInterface");
 
-	if (!PyCallable_Check(pyInstanceCreator))  {
-		s2e->getWarningsStream()
-				<< "[PythonInterface] register_plugin called with parameter "
-				<< "instanceCreator which is not a callable" << '\n';
-		PyErr_SetString(PyExc_TypeError, "register_plugin parameter instanceCreator needs to be a callables");
+	plgInfo.instanceCreator = &call_plugin_create;
+	plgInfo.opaque = new std::pair<PythonInterface*, PyObject*>(std::make_pair(plugin, pyInstanceCreator));
+	return new PluginInfo(plgInfo);
+}
+
+const PluginInfo* PythonPluginWrapper::getPluginInfo() const
+{
+	//TODO: leaks memory
+	PyObject* infoDict = PyObject_GetAttrString(m_pyPlugin, "plugin_info");
+	if (!infoDict || !PyDict_Check(infoDict))
+	{
+		m_plugin->s2e()->getWarningsStream() << "[PythonInterface] Error getting plugin info from wrapped python plugin class" << '\n';
 		return NULL;
 	}
 
-	plgInfo.name = name;
-	plgInfo.description = description;
-	plgInfo.functionName = functionName;
-	plgInfo.configKey = configKey;
-	plgInfo.instanceCreator = &call_plugin_create;
-	plgInfo.opaque = pyInstanceCreator;
-	plugin->m_pluginInfo.push_back(plgInfo);
+	return parsePluginInfo(m_plugin, infoDict);
+}
 
-	s2e->registerPlugin(&plugin->m_pluginInfo.back());
+void PythonPluginWrapper::initialize() {
+	PyObject_CallMethod(m_pyPlugin, "initialize", NULL);
+}
+
+static PyObject* register_plugin(PyObject* self, PyObject* args, PyObject* kw)
+{
+	PyObject* dict;
+	PythonInterface* plugin = *reinterpret_cast<PythonInterface**>(PyModule_GetState(self));
+	static const char* kwlist[] = {
+		"info",
+		NULL
+	};
+
+	if (!PyArg_ParseTupleAndKeywords(
+			args,
+			kw,
+			"O!",
+			const_cast<char **>(kwlist),
+			&PyDict_Type,
+			&dict))
+	{
+		return NULL;
+	}
+
+	plugin->s2e()->getWarningsStream() << "Hello world" << '\n';
+
+	PluginInfo* info = parsePluginInfo(plugin, dict);
+
+	if (!info)
+		return NULL;
+
+	plugin->m_pluginInfo.push_back(info);
+
+	plugin->s2e()->registerPlugin(info);
 	return Py_None;
 }
 
@@ -275,14 +321,15 @@ static struct PyModuleDef s2e_module = {
 	return PyModule_Create(&s2e_module);
 }
 
-
-void PythonInterface::initialize()
-{
-	static const wchar_t * program_name = L"qemu-system-arm";
+ PythonInterface::PythonInterface(S2E* s2e)
+ 	 : Plugin(s2e),
+ 	   m_s2e_instance(Py_None)
+ {
+	 static const wchar_t * program_name = L"qemu-system-arm";
 
 	/* Add a built-in module, before Py_Initialize */
 	if (PyImport_AppendInittab("s2e", PyInit_s2e)) {
-		s2e()->getWarningsStream() << "[PythonInterface] Error adding s2e python module to inittab" << '\n';
+		s2e->getWarningsStream() << "[PythonInterface] Error adding s2e python module to inittab" << '\n';
 		return;
 	}
 
@@ -291,21 +338,24 @@ void PythonInterface::initialize()
 
 	/* Initialize the Python interpreter.  Required. */
 	Py_Initialize();
-	PyObject* s2e_mod = PyImport_ImportModule("s2e");
-	if (!s2e_mod) {
-		s2e()->getWarningsStream() << "[PythonInterface] Error importing s2e module" << '\n';
+	m_s2e_module = PyImport_ImportModule("s2e");
+	if (!m_s2e_module) {
+		s2e->getWarningsStream() << "[PythonInterface] Error importing s2e module" << '\n';
 		return;
 	}
 
-	*reinterpret_cast<PythonInterface**>(PyModule_GetState(s2e_mod)) = this;
+	*reinterpret_cast<PythonInterface**>(PyModule_GetState(m_s2e_module)) = this;
+
+	//TODO: Generate s2e class instance
+	m_s2e_instance = Py_None;
 
 	//Get python file from configuration
-	std::string config_file = s2e()->getConfig()->getString(
+	std::string config_file = s2e->getConfig()->getString(
 						getConfigKey() + ".python_file");
 
 	if (config_file.empty())
 	{
-		s2e()->getWarningsStream() << "[PythonInterface] ERROR: PythonInterface plugin needs a Python "
+		s2e->getWarningsStream() << "[PythonInterface] ERROR: PythonInterface plugin needs a Python "
 			<< "script specified via the 'python_file' configuration option. "
 			<< "Plugin is exiting now."
 			<< '\n';
@@ -314,9 +364,13 @@ void PythonInterface::initialize()
 	}
 
 	if (PyRun_SimpleFileEx(fopen(config_file.c_str(), "r"), config_file.c_str(), 1))  {
-		s2e()->getWarningsStream() << "[PythonInterface] Error running python script" << '\n';
+		s2e->getWarningsStream() << "[PythonInterface] Error running python script" << '\n';
 		return;
 	}
+ }
+
+void PythonInterface::initialize()
+{
 }
 
 } // namespace plugins

@@ -55,10 +55,12 @@ class PythonInterface : public Plugin
 
     S2E_PLUGIN
 public:
-    PythonInterface(S2E* s2e): Plugin(s2e) {}
+    PythonInterface(S2E* s2e);
 
     void initialize();
-    std::list<PluginInfo> m_pluginInfo;
+    std::list<PluginInfo *> m_pluginInfo;
+    PyObject* m_s2e_module;
+    PyObject* m_s2e_instance;
 private:
 
 };
