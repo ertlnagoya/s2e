@@ -123,8 +123,11 @@ void RemoteMemory::initialize()
 
                  uint64_t address = cfg->getInt(getConfigKey() + ".ranges." + *itr + ".address");
                  uint64_t size = cfg->getInt(getConfigKey() + ".ranges." + *itr + ".size");
-                 int mask = ACCESS_TYPE_READ | ACCESS_TYPE_WRITE | ACCESS_TYPE_EXECUTE | ACCESS_TYPE_CONCRETE_VALUE | ACCESS_TYPE_SYMBOLIC_VALUE 
-                    | ACCESS_TYPE_CONCRETE_ADDRESS | ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO;
+				 int mask = ACCESS_TYPE_READ | ACCESS_TYPE_WRITE |
+					 ACCESS_TYPE_EXECUTE | ACCESS_TYPE_CONCRETE_VALUE |
+					 ACCESS_TYPE_SYMBOLIC_VALUE |
+					 ACCESS_TYPE_CONCRETE_ADDRESS | ACCESS_TYPE_IO |
+					 ACCESS_TYPE_NON_IO | ACCESS_TYPE_SIZE_ANY;
                  s2e()->getMessagesStream() << "[RemoteMemory] Monitoring memory range " << hexval(address) << "-" << hexval(address + size) << '\n';
                  memoryInterceptor->addInterceptor(new RemoteMemoryListener(
                         s2e(), 
