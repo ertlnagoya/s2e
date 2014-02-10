@@ -25,8 +25,6 @@ class StateMigration : public Plugin
 		void slotExecuteBlockStart(S2EExecutionState* state, uint64_t pc);
 
 	private:
-		uint64_t m_start_pc;
-		uint64_t m_end_pc;
 		bool m_verbose;
 		RemoteMemory *m_remoteMemory;
 		std::tr1::shared_ptr<RemoteMemoryInterface> m_remoteMemoryInterface;
@@ -50,6 +48,22 @@ class StateMigration : public Plugin
 		/* return true if the buffers are the same */
 		bool areTheBuffersInSync(S2EExecutionState *state,
 				uint64_t addr, uint32_t len);
+		bool addFunc(const std::string &entry);
+		struct target_function {
+			std::string func_name;
+			uint64_t start_pc;
+			uint64_t end_pc;
+			/* TODO: migrate post buffer migration */
+			uint64_t pre_addr;
+			uint32_t pre_len;
+
+			uint64_t post_addr;
+			uint32_t post_len;
+
+			bool migrate_stack;
+		};
+		void doMigration(S2EExecutionState *state, struct target_function func);
+		std::vector<struct target_function> m_functions;
 		class CRC {
 			/**
 			 * Calculate CRC8 of the data.

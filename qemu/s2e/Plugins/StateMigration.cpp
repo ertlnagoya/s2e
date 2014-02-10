@@ -19,12 +19,36 @@ namespace plugins {
 
 S2E_DEFINE_PLUGIN(StateMigration, "StateMigration -- migrate code from emulator to phisycal device", "StateMigration", "RemoteMemory");
 
+bool StateMigration::addFunc(const std::string &entry)
+{
+	std::stringstream ss;
+	std::string sk;
+	struct target_function new_func;
+	ss << getConfigKey() + ".funcs_to_migrate" << "." << entry;
+	sk = ss.str();
+
+	new_func.func_name = entry;
+	new_func.start_pc = (uint64_t) s2e()->getConfig()->getInt(
+			sk + ".startPc");
+	new_func.end_pc = (uint64_t) s2e()->getConfig()->getInt(
+			sk + ".endPc");
+	new_func.pre_addr = (uint64_t) s2e()->getConfig()->getInt(sk + ".pre_addr");
+	new_func.pre_len = (uint32_t) s2e()->getConfig()->getInt(sk + ".pre_len");
+	new_func.migrate_stack = s2e()->getConfig()->getBool(sk + ".migrate_stack");
+
+	m_functions.push_back(new_func);
+	return true;
+}
+
 void StateMigration::initialize()
 {
-	m_start_pc = (uint64_t) s2e()->getConfig()->getInt(
-			getConfigKey() + ".startPc");
-	m_end_pc = (uint64_t) s2e()->getConfig()->getInt(
-			getConfigKey() + ".endPc");
+	std::vector<std::string> functions;
+	functions = s2e()->getConfig()->getListKeys(getConfigKey()+".funcs_to_migrate");
+
+	foreach2(it, functions.begin(), functions.end()) {
+		addFunc(*it);
+	}
+
 	m_verbose = s2e()->getConfig()->getBool(
 			getConfigKey() + ".verbose");
 	m_remoteMemory = static_cast<RemoteMemory*>(s2e()->getPlugin("RemoteMemory"));
@@ -39,9 +63,14 @@ void StateMigration::slotTranslateBlockStart(ExecutionSignal *signal,
                                       TranslationBlock *tb,
                                       uint64_t pc)
 {
-	if (pc == m_start_pc) {
-		s2e()->getDebugStream() << "[StateMigration]: found BB" << '\n';
-		signal->connect(sigc::mem_fun(*this, &StateMigration::slotExecuteBlockStart));
+	for (std::vector<struct target_function>::iterator it = m_functions.begin();
+			it != m_functions.end();
+			++it) {
+		if (pc == it->start_pc) {
+			s2e()->getDebugStream() << "[StateMigration]: found BB" << '\n';
+			signal->connect(sigc::mem_fun(*this,
+						&StateMigration::slotExecuteBlockStart));
+		}
 	}
 }
 
@@ -323,7 +352,22 @@ bool StateMigration::setRegsToState(S2EExecutionState *state,
 
 void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc)
 {
-	/* TODO:
+	/* XXX: this might be too slow */
+	for (std::vector<struct target_function>::iterator it = m_functions.begin();
+			it != m_functions.end();
+			++it) {
+		if (pc == it->start_pc) {
+			doMigration(state, *it);
+			return;
+		}
+	}
+}
+
+void StateMigration::doMigration(S2EExecutionState *state,
+		struct target_function func)
+{
+#define STACK_SIZE 256
+	/* XXX: func is copied
 	 * 1. migrate data
 	 * 2. migrate code
 	 * 3. insert trap isn
@@ -332,157 +376,56 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 	 */
 	/* XXX: asume ARM code */
 	uint32_t regs[16];
-	uint32_t old_regs[16];
 
-#if 0
-	if (m_verbose) {
-		if (ret == false) {
-			printf("[StateMigration]: failed to read symbolic mem\n");
-		} else {
-			printf("[StateMigration]: read concrete mem OK 0x%02hhx%02hhx%02hhx%02hhx\n",
-					((uint8_t *) code)[0],
-					((uint8_t *) code)[1],
-					((uint8_t *) code)[2],
-					((uint8_t *) code)[3]);
-		}
-	}
-#endif
-
-#define STACK_SIZE 256
+	printf("[StateMigration]: start [%s]\n", func.func_name.c_str());
 
 	getRegsFromState(state, regs);
-	memcpy(old_regs, regs, sizeof old_regs);
 
-	printf("[StateMigration]: start\n");
-	/* migrate crc table */
+	/* migrate pre buffer */
 	printf("[StateMigration]: migrate some data\n");
-	/*
-	uint8_t remote_crc = getRemoteChecksum(state, 0x1004f400, 256);
-	uint8_t local_crc = getEmulatorChecksum(state, 0x1004f400, 256);
+	copyToDevice(state, func.pre_addr, func.pre_len);
 
-	printf("[StateMigration]: remote crc: 0x%04hhx\n", remote_crc);
-	printf("[StateMigration]: local crc: 0x%04hhx\n", local_crc);
-	*/
+	if (func.migrate_stack) {
+		/* migrate some stack */
+		uint32_t sp = regs[13];
+		printf("[StateMigration]: migrate some stack: 0x%08x\n", sp);
+		copyToDevice(state, sp, STACK_SIZE);
+	}
 
-	//assert(0);
-	copyToDevice(state, 0x1004f400, 256);
-
-	/* migrate some stack */
-	uint32_t sp = regs[13];
-	printf("[StateMigration]: migrate some stack: 0x%08x\n", sp);
-	copyToDevice(state, sp, STACK_SIZE);
-#if 1
 	/* migrate code */
 	printf("[StateMigration]: migrate some code\n");
-	uint64_t data_len = m_end_pc - m_start_pc + 4; /* including last instruction */
-	copyToDevice(state, pc, data_len);
-	/* TODO: backup instruction */
-	uint32_t old_isn = putBreakPoint(state, pc+data_len-4);
-#endif
+	assert(func.start_pc < func.end_pc);
+	/* code_len including last instruction */
+	uint64_t code_len = func.end_pc - func.start_pc + 4;
+	copyToDevice(state, func.start_pc, code_len);
+	/* XXX: backup instruction, we don't really need this */
+	uint32_t old_isn = putBreakPoint(state, func.end_pc);
 
-#if 0
-	uint32_t backup_isn;
-	uint32_t brk_isn = 0xe1200472;
-	printf("[StateMigration]: copying %ld bytes from emulator to "
-			"device\n", data_len);
-	backup_isn = *((uint32_t *)(&code[data_len-4]));
-	for (int i = 0; i < data_len-4; ++i)
-		remoteMemoryInterface->writeMemory(state, pc+i, 1, (uint64_t)code[i]);
-	*((uint32_t *)(&code[data_len-4])) = brk_isn;
-	for (int i = 3; i >= 0; --i) {
-		/* XXX: write big endian */
-		remoteMemoryInterface->writeMemory(state, pc+data_len-4+(3-i), 1, (uint64_t)(0xff & (brk_isn >> (8*i))));
-	}
-	uint64_t dummy = remoteMemoryInterface->readMemory(state, pc+data_len-4, 4);
-	/* issue a dummy read for flushing the writes */
-	//printf("[StateMigration]: read done: 0x%016lx\n", dummy);
-	printf("[StateMigration]: done copying the code and inserting the"
-			" breakpoint: 0x%016lx\n", dummy);
-#endif
-
-#if 0
-	printf("[StateMigration]: submitting dummy request\n");
-	json::Object request;
-	std::tr1::shared_ptr<json::Object> response;
-	request.Insert(json::Object::Member("cmd", json::String("ping")));
-	remoteMemoryInterface->submitAndWait(state, request, response);
-	printf("[StateMigration]: waiting reply\n");
-	json::String &r = (*response)["reply"];
-	printf("[StateMigration]: got reply: %s\n",
-			(static_cast<std::string>(r)).c_str());
-#endif
-
-#if 0
-	uint32_t brk_isn = 0xe1200472;
-	for (int i = 3; i >= 0; --i) {
-		/* XXX: write big endian */
-		/* write two break instructions because the bootloader checks if
-		 * there's a break ins
-		 */
-		printf("[StateMigration]: ptr\n");
-		m_remoteMemory->getInterface()->writeMemory(state, 0x18004+(3-i), 1, (uint64_t)(0xff & (brk_isn >> (8*i))));
-		m_remoteMemory->getInterface()->writeMemory(state, 0x18000+(3-i), 1, (uint64_t)(0xff & (brk_isn >> (8*i))));
-	}
-#endif
-
-	//regs[15] = 0x18000;
+	/* migrate code state */
 	transferStateToDevice(state, regs);
 
 	/* continue */
 	printf("[StateMigration]: resuming\n");
 	resumeExecution(state);
+	/* XXX: remove this fake read */
 	m_remoteMemory->getInterface()->readMemory(state, 0x18000, 4);
 
 	printf("[StateMigration]: transfering state from device\n");
 	transferStateFromDevice(state, regs);
-	/* fixup for stack pointer, we don't want to smash the stack */
-	/* we should restore r4-r7, r10, r11 */
-	/* basically, we're emulating the instruction that has been replaced
-	 */
-
-	/*
-	regs[13] += 28;
-	regs[4] = old_regs[4];
-	regs[5] = old_regs[5];
-	regs[6] = old_regs[6];
-	regs[7] = old_regs[7];
-	regs[10] = old_regs[10];
-	regs[11] = old_regs[11];
-	for (int i = 0; i < 16; ++i) {
-		printf("%08x ", regs[i]);
-	}
-	printf("\n");
-	*/
-
-	/* can we do the fixup by decrementing the PC */
-	//regs[15] -= 4;
-	//printf("%08x %08lx\n", regs[15], pc+data_len-4);
-	//assert(regs[15] == pc+data_len-4);
-	uint32_t new_sp = regs[13];
-	//regs[15] = 0x12610;
-	//regs[15] = 0xABCD0000;
 	setRegsToState(state, regs);
-	printf("[StateMigration]: migrate some stack back\n");
-	copyFromDevice(state, new_sp, STACK_SIZE);
+
+	if (func.migrate_stack) {
+		uint32_t new_sp = regs[13];
+		printf("[StateMigration]: migrate some stack back\n");
+		copyFromDevice(state, new_sp, STACK_SIZE);
+	}
 	/* restore instruction */
-	writeMemoryBe_32(state, pc+data_len-4, old_isn);
+	writeMemoryBe_32(state, func.end_pc, old_isn);
+	/* XXX: remove */
 	getRegsFromState(state, regs);
 	/* migrate back the stack */
-	printf("[StateMigration]: resuming @0x%08x\n", regs[15]);
+	printf("[StateMigration]: resuming @0x%08x [%s]\n", regs[15], func.func_name.c_str());
 	throw CpuExitException();
-	//assert(0);
-
-	/* This is a test */
-# if 0
-	val = remoteMemoryInterface->readMemory(state, 0x12f38, 4);
-	printf("[StateMigration]: read through remote mem: 0x%016lx\n",
-			val);
-
-	remoteMemoryInterface->writeMemory(state, 0x12f38, 1, (uint64_t)'A');
-	val = remoteMemoryInterface->readMemory(state, 0x12f38, 4);
-	printf("[StateMigration]: read after write: 0x%016lx\n",
-			val);
-#endif
 }
 
 }
