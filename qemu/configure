@@ -2336,43 +2336,37 @@ fi
 ###########################################
 #s2e-python probe: boost-python
 
-BOOST_PYTHONLIBS_LIST="-lboost_python3 -lboost_python3-mt -lboost_python-py32 -lboost_python-py33 -lboost_python-py34"
-
-if test "$s2e" != "no" && test "$s2e_python" == "yes" && test x"${pythonlib}" == xyes; then
-  #Check for boost-python headers
-  cat > $TMPCXX << EOF
-#include <boost/python.hpp>
-int main(int argc, char ** argv) {return 0;}
-EOF
-  if compile_prog_cxx "-Wno-unknown-pragmas -Wno-undef" "${pythonlib_name}"; then
-    #Check for boost-python library
-    cat > $TMPCXX << EOF
-#include <boost/python.hpp>
-int main(int argc, char ** argv) {Py_Initialize(); boost::python::eval("4 == 4"); return 0;}
-EOF
-    boost_pythonlib=no
-    for boost_python_lib in ${BOOST_PYTHONLIBS_LIST}; do
-      if compile_prog_cxx "-Wno-unknown-pragmas -Wno-undef" "${boost_python_lib} ${pythonlib_name}"; then
-        LIBS="${LIBS} ${boost_python_lib}"
-        boost_pythonlib=yes
-        break
-      fi
-    done
-    if [ x"${boost_pythonlib}" == xno ]; then
-      echo "WARNING: boost-python libraries not found. Add boost-python library directory to '--extra-ldflags' if you want this feature. Silently disabling feature s2e-python."
-    fi
-    
-    #TODO: Run compiled program to see that linkage is correct
-#    if [ -f "${TMPE}" ] && "${TMPE}"; then
-#      boost_pythonlib=no
-#      echo "WARNING: There seems to be something wrong with the python and boost-python libraries. Verify that they are using the same versions. Silently disabling feature s2e-python."
-#      exit 1
+#BOOST_PYTHONLIBS_LIST="-lboost_python3 -lboost_python3-mt -lboost_python-py32 -lboost_python-py33 -lboost_python-py34"
+#
+#if test "$s2e" != "no" && test "$s2e_python" == "yes" && test x"${pythonlib}" == xyes; then
+#  #Check for boost-python headers
+#  cat > $TMPCXX << EOF
+##include <boost/python.hpp>
+#int main(int argc, char ** argv) {return 0;}
+#EOF
+#  if compile_prog_cxx "-Wno-unknown-pragmas -Wno-undef" "${pythonlib_name}"; then
+#    #Check for boost-python library
+#    cat > $TMPCXX << EOF
+##include <boost/python.hpp>
+#int main(int argc, char ** argv) {Py_Initialize(); boost::python::eval("4 == 4"); return 0;}
+#EOF
+#    boost_pythonlib=no
+#    for boost_python_lib in ${BOOST_PYTHONLIBS_LIST}; do
+#      if compile_prog_cxx "-Wno-unknown-pragmas -Wno-undef" "${boost_python_lib} ${pythonlib_name}"; then
+#        LIBS="${LIBS} ${boost_python_lib}"
+#        boost_pythonlib=yes
+#        break
+#      fi
+#    done
+#    if [ x"${boost_pythonlib}" == xno ]; then
+#      echo "WARNING: boost-python libraries not found. Add boost-python library directory to '--extra-ldflags' if you want this feature. Silently disabling feature s2e-python."
 #    fi
-  else
-    echo "WARNING: boost-python header not found. Add boost-python include directory to '--extra-cxxflags' if you want this feature. Silently disabling feature s2e-python."
-    boost_pythonlib=no
-  fi
-fi  
+#    
+#  else
+#    echo "WARNING: boost-python header not found. Add boost-python include directory to '--extra-cxxflags' if you want this feature. Silently disabling feature s2e-python."
+#    boost_pythonlib=no
+#  fi
+#fi  
 
 ##########################################
 # libcap probe
@@ -3182,7 +3176,8 @@ fi
 # End of CC checks
 # After here, no more $cc or $ld runs
 
-if test "$s2e_python" == "yes" && test "$pythonlib" = "yes" && test "$boost_pythonlib" = "yes"; then
+#if test "$s2e_python" == "yes" && test "$pythonlib" = "yes" && test "$boost_pythonlib" = "yes"; then
+if test "$s2e_python" == "yes" && test "$pythonlib" = "yes"; then
   s2e_python=yes
 else
   s2e_python=no

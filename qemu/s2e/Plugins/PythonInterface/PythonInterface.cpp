@@ -142,95 +142,98 @@ class PythonPluginWrapper : public Plugin
 private:
 	PythonInterface* m_plugin;
 	PyObject* m_pyPlugin;
+	PluginInfo* m_cachedPluginInfo;
 public:
 	PythonPluginWrapper(PythonInterface* plugin, PyObject* pyPlugin)
 		: Plugin(plugin->s2e()),
 		  m_plugin(plugin),
-		  m_pyPlugin(pyPlugin)
+		  m_pyPlugin(pyPlugin),
+		  m_cachedPluginInfo(0)
 	{
 	}
+
+	//const for this needs to be here because specified by superclass, but is
+	//overridden via const_cast in method
 	virtual const PluginInfo* getPluginInfo() const;
 
 	virtual void initialize();
 };
 
-static Plugin* call_plugin_create(S2E* s2e, void* opaque)
+static Plugin* plugin_create(S2E* s2e, void* opaque)
 {
 	std::pair<PythonInterface*, PyObject*>* pointers = reinterpret_cast< std::pair< PythonInterface*, PyObject* >* >(opaque);
-	//TODO: stub
-	PyObject* callable = pointers->second;
+	PyObject* pyPlugin = pointers->second;
 	PythonInterface* plugin = pointers->first;
-	assert(PyCallable_Check(callable));
-	//TODO: Add parameter
-	PyObject* args = PyList_New(1);
-	PyList_SetItem(args, 0, plugin->m_s2e_instance);
-	PyObject* result = PyObject_Call(callable, args, Py_None);
+	assert(PyCallable_Check(pyPlugin));
+	PyObject* args = PyTuple_New(1);
+	PyTuple_SetItem(args, 0, plugin->m_s2e_instance);
+	PyObject* result = PyObject_CallObject(pyPlugin, args);
+
+	if(!result) {
+		PyErr_Print();
+		assert(false);
+	}
 
 	Py_DECREF(args);
 	return new PythonPluginWrapper(plugin, result);
 }
 
-static PluginInfo* parsePluginInfo(PythonInterface* plugin, PyObject* dict)
+static PluginInfo* parsePluginInfo(PythonInterface* plugin, PyObject* pyPlugin)
 {
 	//TODO: Memory leaks
 	PyObject* pyDependencies = NULL;
-	PyObject* pyInstanceCreator = NULL;
 	PluginInfo plgInfo;
 
-	assert(PyDict_Check(dict));
+	PyObject* dict = PyObject_GetAttrString(pyPlugin, "plugin_info");
+	if (!dict || !PyMapping_Check(dict)) {
+		plugin->s2e()->getWarningsStream() << "[PythonInterface] Error getting plugin info from wrapped python plugin class" << '\n';
+		PyErr_SetString(PyExc_TypeError, "Plugin instance must contain dictionary 'plugin_info'");
+		return NULL;
+	}
 
-	if (!PyDict_GetItemString(dict, "name")) {
+	assert(PyMapping_Check(dict));
+
+	if (!PyMapping_GetItemString(dict, "name")) {
 		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary must contain key 'name'");
 		return NULL;
 	}
 
-	if (!PyUnicode_Check(PyDict_GetItemString(dict, "name"))) {
+	if (!PyUnicode_Check(PyMapping_GetItemString(dict, "name"))) {
 		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary must contain key 'name' with value of type unicode");
 		return NULL;
 	}
 
-	if (!PyDict_GetItemString(dict, "instanceCreator")) {
-		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary must contain key 'instanceCreator'");
-		return NULL;
-	}
-
-	if (!PyCallable_Check(PyDict_GetItemString(dict, "instanceCreator"))) {
-		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary must contain key 'instanceCreator' with value of type callable");
-		return NULL;
-	}
-
-	if (PyDict_GetItemString(dict, "description") && !PyUnicode_Check(PyDict_GetItemString(dict, "description"))) {
+	if (PyMapping_GetItemString(dict, "description") && !PyUnicode_Check(PyMapping_GetItemString(dict, "description"))) {
 		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary value of key 'description' must be unicode");
 		return NULL;
 	}
 
-	if (PyDict_GetItemString(dict, "configKey") && !PyUnicode_Check(PyDict_GetItemString(dict, "configKey"))) {
+	if (PyMapping_GetItemString(dict, "configKey") && !PyUnicode_Check(PyMapping_GetItemString(dict, "configKey"))) {
 		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary value of key 'configKey' must be unicode");
 		return NULL;
 	}
 
-	if (PyDict_GetItemString(dict, "functionName") && !PyUnicode_Check(PyDict_GetItemString(dict, "functionName"))) {
+	if (PyMapping_GetItemString(dict, "functionName") && !PyUnicode_Check(PyMapping_GetItemString(dict, "functionName"))) {
 		PyErr_SetString(PyExc_TypeError, "PluginInfo dictionary value of key 'functionName' must be unicode");
 		return NULL;
 	}
 
-	plgInfo.name = getString(PyDict_GetItemString(dict, "name"));
-	pyInstanceCreator = PyDict_GetItemString(dict, "instanceCreator");
+	plgInfo.name = getString(PyMapping_GetItemString(dict, "name"));
 
-	if (PyDict_GetItemString(dict, "functionName"))
-		plgInfo.functionName = getString(PyDict_GetItemString(dict, "functionName"));
+	if (PyMapping_GetItemString(dict, "functionName"))
+		plgInfo.functionName = getString(PyMapping_GetItemString(dict, "functionName"));
 	else
 		plgInfo.functionName = plgInfo.name;
-	if (PyDict_GetItemString(dict, "configKey"))
-		plgInfo.configKey = getString(PyDict_GetItemString(dict, "configKey"));
+	if (PyMapping_GetItemString(dict, "configKey"))
+		plgInfo.configKey = getString(PyMapping_GetItemString(dict, "configKey"));
 	else
 		plgInfo.configKey = plgInfo.name;
-	if (PyDict_GetItemString(dict, "description"))
-			plgInfo.description = getString(PyDict_GetItemString(dict, "description"));
+	if (PyMapping_GetItemString(dict, "description"))
+			plgInfo.description = getString(PyMapping_GetItemString(dict, "description"));
 
-	if (PyDict_GetItemString(dict, "dependencies"))
+	if (PyMapping_GetItemString(dict, "dependencies"))
 	{
-		pyDependencies = PyDict_GetItemString(dict, "dependencies");
+		pyDependencies = PyMapping_GetItemString(dict, "dependencies");
 		for (Py_ssize_t i = 0; i < PySequence_Size(pyDependencies); i++)
 		{
 			PyObject* item = PySequence_GetItem(pyDependencies, i);
@@ -246,22 +249,18 @@ static PluginInfo* parsePluginInfo(PythonInterface* plugin, PyObject* dict)
 	if (std::find(plgInfo.dependencies.begin(), plgInfo.dependencies.end(), std::string("PythonInterface")) == plgInfo.dependencies.end())
 		plgInfo.dependencies.push_back("PythonInterface");
 
-	plgInfo.instanceCreator = &call_plugin_create;
-	plgInfo.opaque = new std::pair<PythonInterface*, PyObject*>(std::make_pair(plugin, pyInstanceCreator));
+	plgInfo.instanceCreator = &plugin_create;
+	plgInfo.opaque = new std::pair<PythonInterface*, PyObject*>(std::make_pair(plugin, pyPlugin));
 	return new PluginInfo(plgInfo);
 }
 
 const PluginInfo* PythonPluginWrapper::getPluginInfo() const
 {
-	//TODO: leaks memory
-	PyObject* infoDict = PyObject_GetAttrString(m_pyPlugin, "plugin_info");
-	if (!infoDict || !PyDict_Check(infoDict))
-	{
-		m_plugin->s2e()->getWarningsStream() << "[PythonInterface] Error getting plugin info from wrapped python plugin class" << '\n';
-		return NULL;
-	}
+	if (m_cachedPluginInfo)
+		return m_cachedPluginInfo;
 
-	return parsePluginInfo(m_plugin, infoDict);
+	const_cast<PythonPluginWrapper *>(this)->m_cachedPluginInfo = parsePluginInfo(m_plugin, m_pyPlugin);
+	return m_cachedPluginInfo;
 }
 
 void PythonPluginWrapper::initialize() {
@@ -270,7 +269,8 @@ void PythonPluginWrapper::initialize() {
 
 static PyObject* register_plugin(PyObject* self, PyObject* args, PyObject* kw)
 {
-	PyObject* dict;
+	PyObject* pyPlugin;
+	PyObject* pluginInfoDict;
 	PythonInterface* plugin = *reinterpret_cast<PythonInterface**>(PyModule_GetState(self));
 	static const char* kwlist[] = {
 		"info",
@@ -280,17 +280,14 @@ static PyObject* register_plugin(PyObject* self, PyObject* args, PyObject* kw)
 	if (!PyArg_ParseTupleAndKeywords(
 			args,
 			kw,
-			"O!",
+			"O",
 			const_cast<char **>(kwlist),
-			&PyDict_Type,
-			&dict))
+			&pyPlugin))
 	{
 		return NULL;
 	}
 
-	plugin->s2e()->getWarningsStream() << "Hello world" << '\n';
-
-	PluginInfo* info = parsePluginInfo(plugin, dict);
+	PluginInfo* info = parsePluginInfo(plugin, pyPlugin);
 
 	if (!info)
 		return NULL;
