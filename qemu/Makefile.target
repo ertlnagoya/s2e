@@ -546,6 +546,7 @@ s2eobj-y += s2e/Plugins/MemoryMonitor.o
 #s2eobj-y += s2e/Plugins/RemoteControl.o
 s2eobj-y += s2e/Plugins/Searchers/MaxCodeCoverageSearcher.o
 s2eobj-y += s2e/Plugins/InstructionCountKiller.o
+s2eobj-y += s2e/Plugins/IdentifyMemoryRegions.o
 
 
 
