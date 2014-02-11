@@ -40,80 +40,77 @@
 #include <s2e/Plugin.h>
 #include <s2e/Plugins/CorePlugin.h>
 #include <s2e/S2EExecutionState.h>
+#include <s2e/Plugins/MemoryAccess.h>
 
 #include <map>
+#include <list>
 
 namespace s2e {
 namespace plugins {
 
-inline static std::pair<uint64_t, uint64_t> make_range(uint64_t x, uint64_t y)
+class MemoryAccessListener
 {
-    return x < y ? std::make_pair(x, y) : std::make_pair(y, x);
-}
-
-struct range_less
-{
-    bool operator()(const std::pair<uint64_t, uint64_t>& a, const std::pair<uint64_t, uint64_t>& b)
+public:
+	MemoryAccessListener(S2E* s2e, uint64_t address, uint64_t size, int mask)
+        : m_s2e(s2e),
+          m_address(address),
+          m_size(size),
+          m_mask(mask)
     {
-        return a.second < b.first;
     }
+
+    virtual uint64_t getAddress()
+    {
+        return m_address;
+    }
+
+    virtual uint64_t getSize()
+    {
+        return m_size;
+    }
+
+    virtual int getAccessMask()
+    {
+        return m_mask;
+    }
+
+    virtual void access(S2EExecutionState *state,
+            klee::ref<klee::Expr> virtaddr,
+            klee::ref<klee::Expr> hostaddr,
+            klee::ref<klee::Expr> value,
+            bool isWrite,
+            bool isIO,
+            bool isCode) = 0;
+
+    virtual ~MemoryAccessListener() {}
+protected:
+    S2E* m_s2e;
+    uint64_t m_address;
+    uint64_t m_size;
+    int m_mask;
 };
     
-
 class MemoryMonitor : public Plugin
 {
     S2E_PLUGIN
 public:
-    typedef enum
-        {
-          EMemoryRead = 0x1,
-          EMemoryWrite = 0x2,
-          EMemoryExecute = 0x4,
-          EMemorySymbolic = 0x8,
-          EMemoryConcrete = 0x10,
-          EMemoryIO = 0x20,
-          EMemoryNotIO = 0x40
-        } MemoryAccessType;
-
-    typedef sigc::signal<void, S2EExecutionState*,
-        uint64_t /* address */,
-        klee::ref<klee::Expr> /* value */,
-        int /*type*/ > MemoryAccessSignal;
-    typedef sigc::functor_base<void, s2e::S2EExecutionState *, uint64_t, klee::ref<klee::Expr>, int, sigc::nil, sigc::nil, sigc::nil> * MemoryAccessHandlerPtr;
-//    typedef sigc::slot<void, S2EExecutionState *, uint64_t, klee::ref<klee::Expr>, MemoryAccessType> MemoryAccessSlot;
-
-
-    class MemoryWatch
-    {
-    public:
-      MemoryWatch(uint64_t start,
-          uint64_t size,
-          int type,
-          MemoryAccessHandlerPtr handler);
-      int type;
-      uint64_t start;
-      uint64_t size;
-      MemoryAccessSignal signal;
-    };
 
     MemoryMonitor(S2E* s2e);
     ~MemoryMonitor();
 
     void initialize();
-    void slotMemoryAccess(S2EExecutionState *state,
-        klee::ref<klee::Expr> virtaddr /* virtualAddress */,
-        klee::ref<klee::Expr> hostaddr /* hostAddress */,
-        klee::ref<klee::Expr> value /* value */,
-        bool isWrite,
-        bool isIO);
-    void addWatch(uint64_t start,
-        uint64_t length,
-        int type,
-        MemoryAccessHandlerPtr handler);
-    void removeWatch(uint64_t start, uint64_t length);
+    void addListener(MemoryAccessListener* listener);
+    void removeListener(MemoryAccessListener* listener);
 
 private:
-    std::multimap<std::pair<uint64_t, uint64_t>, MemoryWatch, range_less> watches;
+    void slotMemoryAccess(S2EExecutionState *state,
+            klee::ref<klee::Expr> virtaddr /* virtualAddress */,
+            klee::ref<klee::Expr> hostaddr /* hostAddress */,
+            klee::ref<klee::Expr> value /* value */,
+            bool isWrite,
+            bool isIO);
+
+    std::list<MemoryAccessListener *> m_listeners;
     int m_verbose;
 };
 
