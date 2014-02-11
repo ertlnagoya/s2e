@@ -114,7 +114,7 @@ private:
      * Called whenever memory is accessed.
      * This function checks the arguments and then calls memoryAccessed() with parsed arguments.
      */
-    virtual klee::ref<klee::Expr> slotMemoryAccess(S2EExecutionState *state,
+    virtual klee::ref< klee::Expr > slotMemoryAccess(S2EExecutionState *state,
         klee::ref<klee::Expr> virtaddr /* virtualAddress */,
         klee::ref<klee::Expr> hostaddr /* hostAddress */,
         klee::ref<klee::Expr> value /* value */,

@@ -103,7 +103,8 @@ public:
         klee::ref<klee::Expr> hostaddr /* hostAddress */,
         klee::ref<klee::Expr> value /* value */,
         bool isWrite,
-        bool isIO);
+        bool isIO,
+        bool isCode);
     void initialize();
     void addInterceptor(MemoryInterceptor * listener);
     void registerInterceptors();

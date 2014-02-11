@@ -238,7 +238,7 @@ klee::ref<klee::Expr> MemoryChecker::onDataMemoryAccess(S2EExecutionState *state
                                        klee::ref<klee::Expr> virtualAddress,
                                        klee::ref<klee::Expr> hostAddress,
                                        klee::ref<klee::Expr> value,
-                                       bool isWrite, bool isIO)
+                                       bool isWrite, bool isIO, bool isCode)
 {
     if (state->isRunningExceptionEmulationCode()) {
         //We do not check what memory the CPU accesses.

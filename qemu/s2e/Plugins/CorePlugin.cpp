@@ -340,7 +340,7 @@ void s2e_init_timers(S2E* s2e)
 
 static void s2e_trace_memory_access_slow(
         uint64_t vaddr, uint64_t haddr, uint8_t* buf, unsigned size,
-        int isWrite, int isIO)
+        int isWrite, int isIO, int isCode)
 {
     uint64_t value = 0;
     unsigned copy_size = (size > sizeof(value)) ? sizeof (value) : size;
@@ -352,7 +352,7 @@ static void s2e_trace_memory_access_slow(
             klee::ConstantExpr::create(vaddr, 64),
             klee::ConstantExpr::create(haddr, 64),
             exprValue,
-            isWrite, isIO);
+            isWrite, isIO, isCode);
 
         if (exprResult.isNull())
         {
@@ -391,10 +391,10 @@ static void s2e_trace_memory_access_slow(
  */
 void s2e_trace_memory_access(
         uint64_t vaddr, uint64_t haddr, uint8_t* buf, unsigned size,
-        int isWrite, int isIO)
+        int isWrite, int isIO, int isCode)
 {
     if(unlikely(!g_s2e->getCorePlugin()->onDataMemoryAccess.empty())) {
-        s2e_trace_memory_access_slow(vaddr, haddr, buf, size, isWrite, isIO);
+        s2e_trace_memory_access_slow(vaddr, haddr, buf, size, isWrite, isIO, isCode);
     }
 }
 

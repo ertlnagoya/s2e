@@ -158,7 +158,8 @@ klee::ref<klee::Expr> MemoryInterceptorMediator::slotMemoryAccess(S2EExecutionSt
         klee::ref<klee::Expr> hostaddr /* hostAddress */,
         klee::ref<klee::Expr> value /* value */,
         bool is_write,
-        bool is_io)
+        bool is_io,
+        bool is_code)
 {
     int access_type = 0;
     std::vector< std::pair< klee::ref< klee::Expr >, int > > results;

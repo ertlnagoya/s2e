@@ -177,7 +177,7 @@ klee::ref<klee::Expr> MemoryTracer::onDataMemoryAccess(S2EExecutionState *state,
                                klee::ref<klee::Expr> address,
                                klee::ref<klee::Expr> hostAddress,
                                klee::ref<klee::Expr> value,
-                               bool isWrite, bool isIO)
+                               bool isWrite, bool isIO, bool isCode)
 {
     //XXX: This is a hack.
     //Sometimes the onModuleTransition is not fired properly...

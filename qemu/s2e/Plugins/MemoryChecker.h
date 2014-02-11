@@ -84,7 +84,7 @@ class MemoryChecker : public Plugin
                  klee::ref<klee::Expr> virtualAddress,
                  klee::ref<klee::Expr> hostAddress,
                  klee::ref<klee::Expr> value,
-                 bool isWrite, bool isIO);
+                 bool isWrite, bool isIO, bool isCode);
 
     void onStateSwitch(S2EExecutionState *currentState,
                                       S2EExecutionState *nextState);
