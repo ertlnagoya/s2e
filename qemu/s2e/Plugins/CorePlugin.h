@@ -189,7 +189,7 @@ public:
                  klee::ref<klee::Expr> /* virtualAddress */,
                  klee::ref<klee::Expr> /* hostAddress */,
                  klee::ref<klee::Expr> /* value */,
-                 bool /* isWrite */, bool /* isIO */>
+                 bool /* isWrite */, bool /* isIO */, bool /* isCode */>
             onDataMemoryAccess;
 
     /**

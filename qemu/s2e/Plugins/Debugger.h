@@ -94,7 +94,7 @@ private:
                                    klee::ref<klee::Expr> address,
                                    klee::ref<klee::Expr> hostAddress,
                                    klee::ref<klee::Expr> value,
-                                   bool isWrite, bool isIO);
+                                   bool isWrite, bool isIO, bool isCode);
 
     void onTranslateInstructionStart(
         ExecutionSignal *signal,

@@ -245,7 +245,7 @@ private:
             klee::ref<klee::Expr> virtualAddress,
             klee::ref<klee::Expr> hostAddress,
             klee::ref<klee::Expr> value,
-            bool isWrite, bool isIO);
+            bool isWrite, bool isIO, bool isCode);
 
     void invokeAnnotation(
             S2EExecutionState* state,

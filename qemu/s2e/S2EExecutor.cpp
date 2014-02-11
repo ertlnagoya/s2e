@@ -435,11 +435,12 @@ void S2EExecutor::handlerTraceMemoryAccess(Executor* executor,
         Expr::Width width = cast<klee::ConstantExpr>(args[3])->getZExtValue();
         bool isWrite = cast<klee::ConstantExpr>(args[4])->getZExtValue();
         bool isIO    = cast<klee::ConstantExpr>(args[5])->getZExtValue();
+        bool isCode  = cast<klee::ConstantExpr>(args[6])->getZExtValue();
 
         ref<Expr> value = klee::ExtractExpr::create(args[2], 0, width);
 
         s2eExecutor->m_s2e->getCorePlugin()->onDataMemoryAccess.emit(
-                s2eState, args[0], args[1], value, isWrite, isIO);
+                s2eState, args[0], args[1], value, isWrite, isIO, isCode);
     }
 }
 

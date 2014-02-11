@@ -145,7 +145,7 @@ void s2e_on_exception(unsigned intNb);
 /** Called on memory accesses from generated code */
 void s2e_trace_memory_access(
         uint64_t vaddr, uint64_t haddr, uint8_t* buf, unsigned size,
-        int isWrite, int isIO);
+        int isWrite, int isIO, int isCode);
 
 int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr,
         uint8_t* val, unsigned size, int isWrite, int isIO, int isCode);
@@ -347,7 +347,7 @@ uint64_t tcg_llvm_fork_and_concretize(uint64_t value,
                                       uint64_t knownMax);
 void tcg_llvm_trace_memory_access(uint64_t vaddr, uint64_t haddr,
                                   uint64_t value, uint32_t bits,
-                                  uint8_t isWrite, uint8_t isIo);
+                                  uint8_t isWrite, uint8_t isIo, uint8_t isCode);
 void tcg_llvm_hijack_memory_access(uint64_t vaddr, uint64_t haddr,
                                   uint64_t* value, uint32_t bits,
                                   uint8_t isWrite, uint8_t isIo, uint8_t isCode, uint8_t* do_hijack);

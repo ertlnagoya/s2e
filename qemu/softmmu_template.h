@@ -86,7 +86,7 @@
 #ifdef S2E_LLVM_LIB
 #define S2E_TRACE_MEMORY(vaddr, haddr, value, isWrite, isIO) \
     tcg_llvm_trace_memory_access(vaddr, haddr, \
-                                 value, 8*sizeof(value), isWrite, isIO);
+                                 value, 8*sizeof(value), isWrite, isIO, READ_ACCESS_TYPE == 2);
 
 #define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, origCode) \
         do { \
@@ -117,7 +117,7 @@
 #else // S2E_LLVM_LIB
 #define S2E_TRACE_MEMORY(vaddr, haddr, value, isWrite, isIO) \
     s2e_trace_memory_access(vaddr, haddr, \
-                            (uint8_t*) &value, sizeof(value), isWrite, isIO);
+                            (uint8_t*) &value, sizeof(value), isWrite, isIO, READ_ACCESS_TYPE == 2);
 
 #define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, origCode) \
         do { \

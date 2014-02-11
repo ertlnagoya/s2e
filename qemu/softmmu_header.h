@@ -100,7 +100,7 @@
 #define S2EINLINE
 #define S2E_TRACE_MEMORY(vaddr, haddr, value, isWrite, isIO) \
     tcg_llvm_trace_memory_access(vaddr, haddr, \
-                                 value, 8*DATA_SIZE, isWrite, isIO);
+                                 value, 8*DATA_SIZE, isWrite, isIO, ACCESS_TYPE == (NB_MMU_MODES + 1));
 #define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, origCode) \
         do { \
             uint64_t result = 0; \
@@ -131,7 +131,7 @@
 #define S2EINLINE inline
 #define S2E_TRACE_MEMORY(vaddr, haddr, value, isWrite, isIO) \
     s2e_trace_memory_access(vaddr, haddr, \
-                            (uint8_t*) &value, DATA_SIZE, isWrite, isIO);
+                            (uint8_t*) &value, DATA_SIZE, isWrite, isIO, ACCESS_TYPE == (NB_MMU_MODES + 1));
 
 #define S2E_HIJACK_MEMORY_READ(vaddr, haddr, value, isIO, origCode) \
         do { \

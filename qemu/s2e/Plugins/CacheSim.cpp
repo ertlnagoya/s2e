@@ -562,7 +562,7 @@ void CacheSim::onDataMemoryAccess(S2EExecutionState *state,
                               klee::ref<klee::Expr> address,
                               klee::ref<klee::Expr> hostAddress,
                               klee::ref<klee::Expr> value,
-                              bool isWrite, bool isIO)
+                              bool isWrite, bool isIO, bool isCode)
 {
     if(!isa<ConstantExpr>(hostAddress)) {
         s2e()->getWarningsStream()

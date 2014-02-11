@@ -270,7 +270,7 @@ void Annotation::onDataMemoryAccess(S2EExecutionState *state,
         klee::ref<klee::Expr> virtualAddress,
         klee::ref<klee::Expr> hostAddress,
         klee::ref<klee::Expr> value,
-        bool isWrite, bool isIO)
+        bool isWrite, bool isIO, bool isCode)
 {
     //TODO: hostAddress not taken into account
     if (!isa<klee::ConstantExpr>(virtualAddress))

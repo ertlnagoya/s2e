@@ -108,7 +108,8 @@ private:
             klee::ref<klee::Expr> hostaddr /* hostAddress */,
             klee::ref<klee::Expr> value /* value */,
             bool isWrite,
-            bool isIO);
+            bool isIO,
+            bool isCode);
 
     std::list<MemoryAccessListener *> m_listeners;
     int m_verbose;

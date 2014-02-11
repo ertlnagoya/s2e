@@ -96,11 +96,10 @@ namespace s2e
     MemoryMonitor::slotMemoryAccess(S2EExecutionState *state,
         klee::ref<klee::Expr> virtaddr /* virtualAddress */,
         klee::ref<klee::Expr> hostaddr /* hostAddress */,
-        klee::ref<klee::Expr> value /* value */, bool isWrite, bool isIO)
+        klee::ref<klee::Expr> value /* value */, bool isWrite, bool isIO, bool isCode)
     {
     	int access_type = 0;
 		uint64_t address = 0;
-		bool isCode = false;
 
 		//TODO: Currently there is no way to find out if this is a code access
 		if (isWrite)
