@@ -54,11 +54,11 @@ uint64_t IdentifyMemoryRegions::getPageAddress(uint64_t address)
 void IdentifyMemoryRegions::initialize()
 {
     m_traceBlockTranslation = s2e()->getConfig()->getBool(
-                        getConfigKey() + ".traceBlockTranslation");
+                        getConfigKey() + ".traceBlockTranslation", false);
     m_traceMemoryAccesses = s2e()->getConfig()->getBool(
-                        getConfigKey() + ".traceMemoryAccesses");
+                        getConfigKey() + ".traceMemoryAccesses", true);
     m_traceBlockExecution = s2e()->getConfig()->getBool(
-            getConfigKey() + ".traceBlockExecution");
+            getConfigKey() + ".traceBlockExecution", true);
 
     m_pageSize = s2e()->getConfig()->getInt(
             getConfigKey() + ".pageSize", 512);
@@ -72,8 +72,11 @@ void IdentifyMemoryRegions::initialize()
     if (m_traceMemoryAccesses)
     {
     	s2e()->getCorePlugin()->onDataMemoryAccess.connect(
-    	            sigc::mem_fun(*this, &IdentifyMemoryRegions::slotDataMemoryAccess));
+			sigc::mem_fun(*this, &IdentifyMemoryRegions::slotDataMemoryAccess));
     }
+
+    s2e()->getCorePlugin()->onStateKill.connect(
+    		sigc::mem_fun(*this, &IdentifyMemoryRegions::slotStateKill));
 }
 
 void IdentifyMemoryRegions::slotTranslateBlockEnd(ExecutionSignal *signal,
@@ -96,10 +99,12 @@ void IdentifyMemoryRegions::slotTranslateBlockEnd(ExecutionSignal *signal,
 
 void IdentifyMemoryRegions::slotExecuteBlockEnd(S2EExecutionState *state, uint64_t pc)
 {
-	uint64_t stack_pointer;
 	m_accesses[getPageAddress(pc)].execute += 1;
-	state->readCpuRegisterConcrete(CPU_OFFSET(regs[13]), &stack_pointer, sizeof(stack_pointer));
-    m_accesses[getPageAddress(stack_pointer)].stack += 1;
+	klee::ref<klee::Expr> sp = state->readCpuRegister(CPU_REG_OFFSET(13), CPU_REG_SIZE * 8);
+	if (isa<klee::ConstantExpr>(sp))
+	{
+		m_accesses[getPageAddress(cast<klee::ConstantExpr>(sp)->getZExtValue())].stack += 1;
+	}
 }
 
 bool IdentifyMemoryRegions::isShadowMemoryIdentical(uint64_t address, unsigned size, uint64_t value)
@@ -158,21 +163,19 @@ void IdentifyMemoryRegions::slotDataMemoryAccess(S2EExecutionState*,
 
 	uint64_t address = cast<klee::ConstantExpr>(virtualAddress)->getZExtValue();
 	unsigned size = value->getWidth() / 8;
-	uint64_t val = cast<klee::ConstantExpr>(virtualAddress)->getZExtValue();
+	uint64_t val = cast<klee::ConstantExpr>(value)->getZExtValue();
 
-	if (isShadowMemoryInitialized(address, size))
-	{
+	s2e()->getMessagesStream() << "Memory access to " << hexval(address) << ": " << hexval(val)
+			<< " " << (isWrite ? "(write)" : "(read)") << '\n';
 
-		if (!isShadowMemoryIdentical(address, size, val))
-		{
-			m_accesses[getPageAddress(address)].io += 1;
-			shadowMemoryWrite(address, size, val);
-		}
-	}
-	else
+	if (!isWrite
+			&& isShadowMemoryInitialized(address, size)
+	        && !isShadowMemoryIdentical(address, size, val))
 	{
-		shadowMemoryWrite(address, size, val);
+		m_accesses[getPageAddress(address)].io += 1;
 	}
+
+	shadowMemoryWrite(address, size, val);
 
 	if (isWrite)
 		m_accesses[getPageAddress(address)].write += 1;
@@ -224,7 +227,12 @@ static MemoryLabel getLabel(AccessCount& accessCount)
 	}
 	else if (accessCount.write > 0)
 	{
-		label = LABEL_DATA;
+		if (accessCount.read == 0)
+			//TODO: This is not really correct, as dead variables (that are only initialized but never used)
+			//will be marked as IO. Have to think of something better
+			label = LABEL_UNDECIDED;
+		else
+			label = LABEL_DATA;
 	}
 	else
 		label = LABEL_RODATA;
@@ -278,8 +286,8 @@ void IdentifyMemoryRegions::slotStateKill(S2EExecutionState* state)
 		{
 			fout << "0x";
 			fout << std::setfill('0') << std::setw(8) << std::hex << itr->first.first;
-			fout << ", ";
-			fout << std::setfill('0') << std::setw(8) << std::hex << itr->first.second;
+			fout << ", 0x";
+			fout << std::setfill('0') << std::setw(8) << std::hex << (itr->first.second - itr->first.first);
 			fout << ", ";
 			switch(itr->second)
 			{
