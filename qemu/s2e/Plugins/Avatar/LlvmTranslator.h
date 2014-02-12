@@ -14,6 +14,7 @@ class LlvmTranslator : public Plugin
 		public:
 			LlvmTranslator(S2E* s2e): Plugin(s2e) {m_s2e = s2e;}
 			llvm::Function *get_llvm_func(TranslationBlock *tb);
+			llvm::Function *filter_llvm_func(llvm::Function *func);
 			void initialize();
 		private:
 			S2E* m_s2e;
