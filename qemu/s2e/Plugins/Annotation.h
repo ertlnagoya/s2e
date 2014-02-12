@@ -33,6 +33,59 @@
  * All contributors are listed in the S2E-AUTHORS file.
  */
 
+/**
+ * TODO:
+ * - Currently only one memory annotation can be made per address. If there are
+ *   several ranges that include an address, only the first one will be notified.
+ * - Currently returning a different value in symbolic mode has unknown effects.
+ *   I haven't yet understood from where the onDataMemoryAccess signal is emitted
+ *   (S2EExecutor::handlerTraceMemoryAccess is called directly from
+ *
+ * This is the configuration used for the memory annotation:
+ *     Annotation = {
+ *       uart_read = {
+ *           module = "bootloader",
+ *           active = true,
+ *           address = 0xfffb8000,
+ *           size = 0x100,
+ *           memoryAnnotation = "ann_read_serial",
+ *           beforeInstruction = true,
+ *           switchInstructionToSymbolic = true,
+ *
+ *       }
+ *     }
+ *
+ * And this is the annotation function:
+ *
+ * function ann_read_serial(state, s2e, address, width, value, is_write, is_io)
+ *   -- we are not interested in writes
+ *   if is_write then
+ *       return false, value
+ *    end
+ *
+ *    if address == 0xfffb8018 then
+ *        return false, 0x80 --TXFE set, RXFE not set
+ *    elseif address == 0xfffb8004 then
+ *        return false, 0x0
+ *    else
+ *        local pc = s2e:readRegister("pc")
+ *        if pc >= 0xe8b4 and pc < 0xe8ec then
+ *           --In uart_reset we don't care about the return value
+ *           return false, 0
+ *        elseif pc >= 0xE8F0 and pc < 0xE91C then
+ *           local str_mfgt1 = "MFGT1"
+ *           state:setValue("mfg_state", state:getValue("mfg_state") + 1)
+ *           if state:getValue("mfg_state") > 5 then
+ *               state:setValue("mfg_state", 1)
+ *           end
+ *           return false, string.byte(str_mfgt1, state:getValue("mfg_state"))
+ *        else
+ *           io.write(string.format("serial: Unknown access at address 0x%x, pc 0x%x\n", address, s2e:readRegister("pc")))
+ *        end
+ *    end
+ * end
+ */
+
 #ifndef S2E_PLUGINS_FUNCSKIPPER_H
 #define S2E_PLUGINS_FUNCSKIPPER_H
 
@@ -44,6 +97,8 @@
 #include <s2e/Plugins/ModuleExecutionDetector.h>
 #include <s2e/Plugins/OSMonitor.h>
 #include <s2e/ConfigFile.h>
+
+#include <list>
 
 namespace s2e {
 namespace plugins {
@@ -85,6 +140,16 @@ namespace plugins {
         }
     };
 
+    struct MemoryAnnotationCfgEntry
+    {
+        std::string annotation;
+        uint64_t rangeStart;
+        uint64_t rangeSize;
+
+        bool operator()(const MemoryAnnotationCfgEntry *a1, const MemoryAnnotationCfgEntry* a2) const {
+            return a1->rangeStart < a2->rangeStart;
+        }
+    };
 
 class LUAAnnotation;
 
@@ -103,6 +168,7 @@ private:
     ModuleExecutionDetector *m_moduleExecutionDetector;
     OSMonitor *m_osMonitor;
     CfgEntries m_entries;
+    std::list<MemoryAnnotationCfgEntry> m_memoryAnnotations;
 
     //To instrument specific instructions in the code
     bool m_translationEventConnected;
@@ -175,6 +241,12 @@ private:
 
     void onInstruction(S2EExecutionState *state, uint64_t pc);
 
+    void onDataMemoryAccess(S2EExecutionState*,
+            klee::ref<klee::Expr> virtualAddress,
+            klee::ref<klee::Expr> hostAddress,
+            klee::ref<klee::Expr> value,
+            bool isWrite, bool isIO, bool isCode);
+
     void invokeAnnotation(
             S2EExecutionState* state,
             FunctionMonitorState *fns,
@@ -230,6 +302,9 @@ public:
     int activateRule(lua_State *L);
     int isReturn(lua_State *L);
     int isCall(lua_State *L);
+    int printDebug(lua_State* L);
+    int printMessage(lua_State* L);
+    int printWarning(lua_State* L);
 
     int setValue(lua_State *L);
     int getValue(lua_State *L);

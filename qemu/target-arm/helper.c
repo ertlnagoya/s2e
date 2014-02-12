@@ -1507,6 +1507,9 @@ void HELPER(set_cp15)(CPUARMState *env, uint32_t insn, uint32_t val)
     op1 = (insn >> 21) & 7;
     op2 = (insn >> 5) & 7;
     crm = insn & 0xf;
+    qemu_log("Unimplemented cp15 register write (c%d, c%d, {%d, %d})\n",
+              (insn >> 16) & 0xf, crm, op1, op2);
+	return;
     switch ((insn >> 16) & 0xf) {
     case 0:
         /* ID codes.  */
@@ -1904,7 +1907,7 @@ void HELPER(set_cp15)(CPUARMState *env, uint32_t insn, uint32_t val)
     return;
 bad_reg:
     /* ??? For debugging only.  Should raise illegal instruction exception.  */
-    cpu_abort(env, "Unimplemented cp15 register write (c%d, c%d, {%d, %d})\n",
+    qemu_log("Unimplemented cp15 register write (c%d, c%d, {%d, %d})\n",
               (insn >> 16) & 0xf, crm, op1, op2);
 }
 
@@ -1917,6 +1920,9 @@ uint32_t HELPER(get_cp15)(CPUARMState *env, uint32_t insn)
     op1 = (insn >> 21) & 7;
     op2 = (insn >> 5) & 7;
     crm = insn & 0xf;
+    //qemu_log("Unimplemented cp15 register read (c%d, c%d, {%d, %d})\n",
+    //          (insn >> 16) & 0xf, crm, op1, op2);
+	//return 0;
     switch ((insn >> 16) & 0xf) {
     case 0: /* ID codes.  */
         switch (op1) {

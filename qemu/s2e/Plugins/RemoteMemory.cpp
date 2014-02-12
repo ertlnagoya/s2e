@@ -45,7 +45,6 @@ extern "C" {
 }
 
 #include "RemoteMemory.h"
-#include "MemoryInterceptorMediator.h"
 #include <s2e/S2E.h>
 #include <s2e/S2EExecutionState.h>
 #include <s2e/S2EExecutor.h>
@@ -62,7 +61,7 @@ extern "C" {
 namespace s2e {
 namespace plugins {
     
-S2E_DEFINE_PLUGIN(RemoteMemory, "Asks a remote program what the memory contents actually should be", "RemoteMemory", "MemoryInterceptorMediator", "Initializer");
+S2E_DEFINE_PLUGIN(RemoteMemory, "Asks a remote program what the memory contents actually should be", "RemoteMemory", "MemoryInterceptor", "Initializer");
 
 void RemoteMemory::initialize()
 {
@@ -75,46 +74,83 @@ void RemoteMemory::initialize()
     std::string serverSocketAddress = cfg->getString(getConfigKey() + ".listen", ":5555", &ok);
     
     m_remoteInterface = std::tr1::shared_ptr<RemoteMemoryInterface>(new RemoteMemoryInterface(s2e(), serverSocketAddress, m_verbose)); 
+    MemoryInterceptor* memoryInterceptor = static_cast<MemoryInterceptor *>(s2e()->getPlugin("MemoryInterceptor"));
+    assert(memoryInterceptor);
+    
         
-    //Connect memory access monitoring
-//    s2e()->getCorePlugin()->onDataMemoryAccess.connect(
-//          sigc::mem_fun(*this, &RemoteMemory::slotMemoryAccess));
-          
-//     s2e()->getCorePlugin()->onTranslateInstructionStart.connect(
-//           sigc::mem_fun(*this, &RemoteMemory::slotTranslateInstructionStart));
+     std::vector<std::string> keys = cfg->getListKeys(getConfigKey() + ".ranges", &ok);
+     if (ok)
+     {
+         for (std::vector<std::string>::iterator itr = keys.begin();
+              itr != keys.end();
+              itr++)
+         {
+             int mask = ACCESS_TYPE_CONCRETE_VALUE | ACCESS_TYPE_SYMBOLIC_VALUE
+                     | ACCESS_TYPE_CONCRETE_ADDRESS | ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO;
+
+             if (!cfg->hasKey(getConfigKey() + ".ranges." + *itr + ".address") || 
+                 !cfg->hasKey(getConfigKey() + ".ranges." + *itr + ".size")) 
+             {
+                 s2e()->getWarningsStream() << "[RemoteMemory] Invalid range configuration key: '" << *itr << "'. start or end subkey is missing." << '\n';
+             }
+             else
+             {
+                 if (cfg->hasKey(getConfigKey() + ".ranges." + *itr + ".access"))
+                 {
+                     ConfigFile::string_list access_words = cfg->getStringList(
+                             getConfigKey() + ".ranges." + *itr + ".access",
+                             ConfigFile::string_list(),
+                             &ok);
+                     if (ok)
+                     {
+                         for(ConfigFile::string_list::const_iterator access_word = access_words.begin();
+                             access_word != access_words.end();
+                             access_word++)
+                         {
+                             if (*access_word == "read")
+                                 mask |= ACCESS_TYPE_READ;
+                             else if (*access_word == "write")
+                                 mask |= ACCESS_TYPE_WRITE;
+                             else if (*access_word == "execute")
+                                 mask |= ACCESS_TYPE_EXECUTE;
+                         }
+                     }
+                 }
+                 else
+                 {
+                     mask |= ACCESS_TYPE_READ | ACCESS_TYPE_WRITE | ACCESS_TYPE_EXECUTE;
+                 }
+
+                 uint64_t address = cfg->getInt(getConfigKey() + ".ranges." + *itr + ".address");
+                 uint64_t size = cfg->getInt(getConfigKey() + ".ranges." + *itr + ".size");
+				 int mask = ACCESS_TYPE_READ | ACCESS_TYPE_WRITE |
+					 ACCESS_TYPE_EXECUTE | ACCESS_TYPE_CONCRETE_VALUE |
+					 ACCESS_TYPE_SYMBOLIC_VALUE |
+					 ACCESS_TYPE_CONCRETE_ADDRESS | ACCESS_TYPE_IO |
+					 ACCESS_TYPE_NON_IO | ACCESS_TYPE_SIZE_ANY;
+                 s2e()->getMessagesStream() << "[RemoteMemory] Monitoring memory range " << hexval(address) << "-" << hexval(address + size) << '\n';
+                 memoryInterceptor->addInterceptor(new RemoteMemoryListener(
+                        s2e(), 
+                        m_remoteInterface.get(), 
+                        address, 
+                        size, 
+                        mask));
+             }
+         }
+     }
+     else
+     {
+                 int mask = ACCESS_TYPE_READ | ACCESS_TYPE_WRITE | ACCESS_TYPE_EXECUTE | ACCESS_TYPE_CONCRETE_VALUE | ACCESS_TYPE_SYMBOLIC_VALUE 
+                    | ACCESS_TYPE_CONCRETE_ADDRESS | ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO;
+         s2e()->getMessagesStream() << "[RemoteMemory] No memory ranges specified, forwarding requests for all memory" << '\n';
+                 memoryInterceptor->addInterceptor(new RemoteMemoryListener(
+                        s2e(), 
+                        m_remoteInterface.get(), 
+                        0, 
+                        0xffffffffffffffffULL, 
+                        mask));
+     }
     
-    
-//     std::vector<std::string> keys = cfg->getListKeys(getConfigKey() + ".ranges", &ok);
-//     if (ok)
-//     {
-//         for (std::vector<std::string>::iterator itr = keys.begin();
-//              itr != keys.end();
-//              itr++)
-//         {
-//             if (!cfg->hasKey(getConfigKey() + ".ranges." + *itr + ".start_range") || 
-//                 !cfg->hasKey(getConfigKey() + ".ranges." + *itr + ".end_range"))
-//             {
-//                 s2e()->getWarningsStream() << "[RemoteMemory] Invalid range configuration key: '" << *itr << "'. start or end subkey is missing." << '\n';
-//             }
-//             else
-//             {
-//                 uint64_t start = cfg->getInt(getConfigKey() + ".ranges." + *itr + ".start_range");
-//                 uint64_t end = cfg->getInt(getConfigKey() + ".ranges." + *itr + ".end_range");
-//                 
-//                 s2e()->getMessagesStream() << "[RemoteMemory] Monitoring memory range " << hexval(start) << "-" << hexval(end) << '\n';
-//                 this->ranges.push_back(std::make_pair(start, end));
-//             }
-//         }
-//     }
-//     else
-//     {
-//         s2e()->getMessagesStream() << "[RemoteMemory] No memory ranges specified, forwarding requests for all memory" << '\n';
-//     }
-    
-    MemoryInterceptorMediator * memoryInterceptorMediator = static_cast<MemoryInterceptorMediator *>(s2e()->getPlugin("MemoryInterceptorMediator"));
-    assert(memoryInterceptorMediator);
-    
-    memoryInterceptorMediator->addInterceptor(this);
       
     if (m_verbose)
         s2e()->getDebugStream() << "[RemoteMemory]: initialized" << '\n';
@@ -124,151 +160,13 @@ RemoteMemory::~RemoteMemory()
 {
 }
 
-// void RemoteMemory::slotTranslateInstructionStart(ExecutionSignal* signal, 
-//             S2EExecutionState* state,
-//             TranslationBlock* tb,
-//             uint64_t pc)
-// {
-//     signal->connect(sigc::mem_fun(*this, &RemoteMemory::slotExecuteInstructionStart));    
-// }
-
-// void RemoteMemory::slotExecuteInstructionStart(S2EExecutionState* state, uint64_t pc)
-// {
-//     //TODO: Check if IRQ has arrived, and inject it
-// }
-
-klee::ref<klee::Expr> RemoteMemory::slotMemoryAccess(S2EExecutionState *state,
-        klee::ref<klee::Expr> virtaddr /* virtualAddress */,
-        klee::ref<klee::Expr> hostaddr /* hostAddress */,
-        klee::ref<klee::Expr> value /* value */,
-        int access_type)
-{
-    //Catch all the cases that we don't handle (symbolic values, IO addresses)
-    if (!isa<klee::ConstantExpr>(virtaddr))
-    {
-        s2e()->getWarningsStream()
-            << "[RemoteMemory]: Unexpected symbolic address ("
-            << virtaddr->getKind() << ")" << '\n';
-        return value;
-    }
-      
-//     if (isIO)
-//     {
-//         s2e()->getWarningsStream() << "[RemoteMemory]: Unexpected access to IO memory" << '\n';
-// //        return;
-//     }
-    
-    if (!isa<klee::ConstantExpr>(value))
-    {
-        s2e()->getWarningsStream()
-            << "[RemoteMemory]: Unexpected symbolic value ("
-            << value->getKind() << ")" << '\n';
-        return value;
-    }
-    
-    MemoryAccessType accessType = EMemoryAccessType_None;
-    uint64_t addr = cast<klee::ConstantExpr>(virtaddr)->getZExtValue();
-    uint64_t width = value->getWidth() / 8;
-
-    //FIXME: On a write request, the size is systematically one too big -> correcting this here
-//    if (isWrite)
-//        width = width / 2;
-    
-//     if (!this->ranges.empty())
-//     {
-//         bool in_range = false;
-//         
-//         for(std::vector<std::pair<uint64_t, uint64_t> >::iterator itr = this->ranges.begin();
-//             itr != this->ranges.end();
-//             itr++)
-//         {
-//             if (addr >= itr->first && addr < itr->second)
-//             {
-//                 in_range = true;
-//                 break;
-//             }
-//         }
-//         
-//         if (!in_range)
-//             return value;
-//     }
-    
-    if (access_type & ACCESS_TYPE_WRITE)
-        accessType = EMemoryAccessType_Write;
-    else if (access_type & (ACCESS_TYPE_READ | ACCESS_TYPE_EXECUTE))
-    {
-        if (addr == state->getPc())
-            accessType = EMemoryAccessType_Execute;
-        else 
-            accessType = EMemoryAccessType_Read;
-    }
-            
-    uint64_t rValue = memoryAccessed(state, addr, width, cast<klee::ConstantExpr>(value)->getZExtValue(), accessType);    
-    
-    if (rValue != cast<klee::ConstantExpr>(value)->getZExtValue())
-    {
-            if (m_verbose)
-            {
-            s2e()->getDebugStream() << "[RemoteMemory]: Returning different value " << hexval(rValue) << "[" << width 
-                << "] instead of " << hexval(cast<klee::ConstantExpr>(value)->getZExtValue()) << "[" << (value->getWidth() / 8) << "]" << '\n';
-            }
-        return klee::ConstantExpr::create(rValue, width * 8);
-        
-//        s2e()->getWarningsStream() << "[RemoteMemory]: Unimplemented -> write back different value " << hexval(rValue) << " instead of " << hexval(cast<klee::ConstantExpr>(value)->getZExtValue()) << '\n';
-//        writeMemory(state, addr, width * 8, rValue);
-
-        //TODO: Write value back into klee expr
-    }
-    else
-    {
-        return value;
-    }
-}
-
-uint64_t RemoteMemory::memoryAccessed(S2EExecutionState * state, uint64_t address, int size, uint64_t value, MemoryAccessType type)
-{
-    assert(size == 1 || size == 2 || size == 4 || size == 8);
-    
-    if (m_verbose)
-    {
-        s2e()->getDebugStream() << hexval(address)
-                                << "["  << size 
-                                << "] accessed for " 
-                                << (type == EMemoryAccessType_Read ? "read" : (type == EMemoryAccessType_Write ? "write"  : "execute"))
-                                << " with value " << hexval(value)  << '\n';
-                                
-    }
-    
-    if (type == EMemoryAccessType_Execute || type == EMemoryAccessType_Read)
-    {
-        value = m_remoteInterface->readMemory(state, address, size);
-    }
-    else
-    {
-        m_remoteInterface->writeMemory(state, address, size, value);
-    }
-    return value;
-}
-
-static std::string intToHex(uint64_t val)
+std::string intToHex(uint64_t val)
 {
     std::stringstream ss;
     
     ss << "0x" << std::hex << val;
     return ss.str();
 }
-/*
-static uint64_t hexToInt(std::string str)
-{
-    std::stringstream ss;
-    uint64_t val;
-    
-    ss << str.substr(2, std::string::npos);
-    ss >> std::hex >> val;
-    
-    return val;
-}
-*/
 
 static uint64_t hexBufToInt(std::string str)
 {
@@ -280,9 +178,6 @@ static uint64_t hexBufToInt(std::string str)
 
     return val;
 }
-
-    
-    
 
 RemoteMemoryInterface::RemoteMemoryInterface(S2E* s2e, std::string remoteSockAddress, bool verbose) 
     : m_s2e(s2e), 
@@ -387,6 +282,7 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
      json::Object params;
      json::Object cpu_state;
      
+	 setHit();
      if (m_verbose)
         m_s2e->getDebugStream() << "[RemoteMemory] reading memory from address " << hexval(address) << "[" << size << "]" << '\n';
      request.Insert(json::Object::Member("cmd", json::String("read")));
@@ -412,62 +308,30 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
      params.Insert(json::Object::Member("address", json::String(intToHex(address))));
      params.Insert(json::Object::Member("size", json::String(intToHex(size))));
      
-     //Build cpu state
-#ifdef TARGET_ARM
-#define CPU_NB_REGS 16
-#endif
-     for (int i = 0; i < CPU_NB_REGS - 1; i++)
-     {
-         std::stringstream ss;
-         
-         ss << "r";
-         ss << i;
-         
-         klee::ref<klee::Expr> exprReg = state->readCpuRegister(CPU_REG_OFFSET(i), CPU_REG_SIZE << 3);
-         if (isa<klee::ConstantExpr>(exprReg))
-         {
-             cpu_state.Insert(json::Object::Member(ss.str(), json::String(intToHex(cast<klee::ConstantExpr>(exprReg)->getZExtValue()))));
-         }
-         else
-         {
-             std::string example = intToHex(m_s2e->getExecutor()->toConstantSilent(*state, exprReg)->getZExtValue());
-             m_s2e->getWarningsStream() << "[RemoteMemory] Register " << i << " was symbolic during a read at "
-            		 << hexval(state->getPc()) <<", taking " << example << " as an example" << '\n';
-             cpu_state.Insert(json::Object::Member(ss.str(), json::String(example)));
-         }
-     }
-     
-     cpu_state.Insert(json::Object::Member("pc", json::String(intToHex(state->getPc()))));
-     
-#ifdef TARGET_ARM
-     //TODO: Fill CPSR register
-     
-//     cpsr.Insert(json::Object::Member("cf", json::Bool(
-     
-     cpu_state.Insert(json::Object::Member("cpsr", json::String(intToHex(state->getFlags()))));
-#endif
-     
+	 buildCPUState(state, cpu_state, "read");
      request.Insert(json::Object::Member("params", params));
      request.Insert(json::Object::Member("cpu_state", cpu_state));
 
-     qemu_mutex_lock(&m_mutex);
-     m_state = state;
-     
-     json::Writer::Write(request, *m_socket);
-     m_socket->flush();
+	 std::tr1::shared_ptr<json::Object> response;
+	 submitAndWait(state, request, response);
 
-     qemu_cond_wait(&m_responseCond, &m_mutex);
-     
-     //TODO: There could be multiple responses, but we assume the first is the right
-     std::tr1::shared_ptr<json::Object> response = m_responseQueue.front();
-     m_responseQueue.pop();
-     m_state = NULL;
-     qemu_mutex_unlock(&m_mutex);
-     
-     //TODO: No checking if this is the right response, if there is an attribute 'value'
+	//TODO: There could be multiple responses, but we assume the first is the right
      json::String& strValue = (*response)["value"];
-//     m_s2e->getMessagesStream() << "[RemoteMemory] Remote returned value " << strValue << '\n';
      return hexBufToInt(strValue);
+}
+
+bool RemoteMemoryInterface::waitForAnswer(S2EExecutionState *state,
+		std::tr1::shared_ptr<json::Object> &response)
+{
+	qemu_mutex_lock(&m_mutex);
+	m_state = state;
+	qemu_cond_wait(&m_responseCond, &m_mutex);
+
+	response = m_responseQueue.front();
+	m_responseQueue.pop();
+	m_state = NULL;
+	qemu_mutex_unlock(&m_mutex);
+	return true;
 }
   
 /**
@@ -480,6 +344,7 @@ void RemoteMemoryInterface::writeMemory(S2EExecutionState * state, uint32_t addr
      json::Object params;
      json::Object cpu_state;
      
+	 setHit();
      if (m_verbose)
         m_s2e->getDebugStream() << "[RemoteMemory] writing memory at address " << hexval(address) << "[" << size << "] = " << hexval(value) << '\n';
      request.Insert(json::Object::Member("cmd", json::String("write")));
@@ -490,56 +355,159 @@ void RemoteMemoryInterface::writeMemory(S2EExecutionState * state, uint32_t addr
      params.Insert(json::Object::Member("address", json::String(intToHex(address))));
      params.Insert(json::Object::Member("size", json::String(intToHex(size))));
      
-     //Build cpu state
-#ifdef TARGET_ARM
-#define CPU_NB_REGS 16
-#endif
-     for (int i = 0; i < CPU_NB_REGS - 1; i++)
-     {
-         std::stringstream ss;
-         
-         ss << "r";
-         ss << i;
-         
-         klee::ref<klee::Expr> exprReg = state->readCpuRegister(CPU_REG_OFFSET(i), CPU_REG_SIZE << 3);
-         if (isa<klee::ConstantExpr>(exprReg))
-         {
-             cpu_state.Insert(json::Object::Member(ss.str(), json::String(intToHex(cast<klee::ConstantExpr>(exprReg)->getZExtValue()))));
-         }
-         else
-         {
-             std::string example = intToHex(m_s2e->getExecutor()->toConstantSilent(*state, exprReg)->getZExtValue());
-             m_s2e->getWarningsStream() << "[RemoteMemory] Register " << i << " was symbolic during a write at "
-            		 << hexval(state->getPc()) << ", taking " << example << " as an example" << '\n';
-             cpu_state.Insert(json::Object::Member(ss.str(), json::String(example)));
-         }
-     }
      
-     cpu_state.Insert(json::Object::Member("pc", json::String(intToHex(state->getPc()))));
-     
-#ifdef TARGET_ARM
-     //TODO: Fill CPSR register
-     
-//     cpsr.Insert(json::Object::Member("cf", json::Bool(
-     
-     cpu_state.Insert(json::Object::Member("cpsr", json::String(intToHex(state->getFlags()))));
-#endif
-     
+	 buildCPUState(state, cpu_state, "write");
      request.Insert(json::Object::Member("params", params));
      request.Insert(json::Object::Member("cpu_state", cpu_state));
 
-     qemu_mutex_lock(&m_mutex);
-     m_state = state;
-     
-     json::Writer::Write(request, *m_socket);
-     m_socket->flush();
-     qemu_mutex_unlock(&m_mutex);
+	 submitRequest(state, request);
+}
+
+bool RemoteMemoryInterface::buildCPUState(S2EExecutionState *state,
+		json::Object &cpu_state,
+		std::string op = "access")
+{
+	bool ret = true;
+
+#ifdef TARGET_ARM
+#define CPU_NB_REGS 16
+#endif
+	for (int i = 0; i < CPU_NB_REGS - 1; i++)
+	{
+		std::stringstream ss;
+
+		ss << "r";
+		ss << i;
+
+		klee::ref<klee::Expr> exprReg =
+			state->readCpuRegister(CPU_REG_OFFSET(i),
+					CPU_REG_SIZE << 3);
+		if (isa<klee::ConstantExpr>(exprReg))
+		{
+			cpu_state.Insert(json::Object::Member(ss.str(),
+						json::String(intToHex(cast<klee::ConstantExpr>(exprReg)->getZExtValue()))));
+		}
+		else
+		{
+			std::string example =
+				intToHex(m_s2e->getExecutor()->toConstantSilent(*state,
+							exprReg)->getZExtValue());
+			m_s2e->getWarningsStream() << "[RemoteMemory] Register "
+				<< i << " was symbolic during a " << op << " at "
+				<< hexval(state->getPc()) << ", taking " <<
+				example << " as an example" << '\n';
+			cpu_state.Insert(json::Object::Member(ss.str(),
+						json::String(example)));
+			ret = false;
+		}
+	}
+	cpu_state.Insert(json::Object::Member("pc",
+				json::String(intToHex(state->getPc()))));
+
+#ifdef TARGET_ARM
+	//TODO: Fill CPSR register
+	//     cpsr.Insert(json::Object::Member("cf", json::Bool(
+	cpu_state.Insert(json::Object::Member("cpsr",
+				json::String(intToHex(state->getFlags()))));
+#endif
+	return ret;
+}
+
+void RemoteMemoryInterface::submitRequest(S2EExecutionState *state,
+		json::Object &request)
+{
+	qemu_mutex_lock(&m_mutex);
+	m_state = state;
+	json::Writer::Write(request, *m_socket);
+	m_socket->flush();
+	qemu_mutex_unlock(&m_mutex);
+}
+bool RemoteMemoryInterface::submitAndWait(S2EExecutionState *state,
+		json::Object &request,
+		std::tr1::shared_ptr<json::Object> &response)
+{
+	qemu_mutex_lock(&m_mutex);
+	m_state = state;
+	json::Writer::Write(request, *m_socket);
+	m_socket->flush();
+
+	qemu_cond_wait(&m_responseCond, &m_mutex);
+
+	/* TODO: test if this is our request reply.
+	 * Right now, the hidden assumption is that each submited request
+	 * that requires an aswer is submited via this function i.e. we're
+	 * *always* popping the reply
+	 */
+	response = m_responseQueue.front();
+	m_responseQueue.pop();
+	m_state = NULL;
+	qemu_mutex_unlock(&m_mutex);
+
+	return true;
 }
 
 RemoteMemoryInterface::~RemoteMemoryInterface()
 {
     qemu_cond_destroy(&m_responseCond);
     qemu_mutex_destroy(&m_mutex);
+}
+
+
+RemoteMemoryListener::RemoteMemoryListener(
+        S2E* s2e,
+        RemoteMemoryInterface* remoteMemoryIf,
+        uint64_t address,
+        uint64_t size,
+        uint64_t mask)
+        : MemoryAccessHandler(s2e, address, size, mask),
+          m_remoteMemoryIf(remoteMemoryIf)
+{
+}
+
+klee::ref<klee::Expr> RemoteMemoryListener::read(S2EExecutionState *state,
+            klee::ref<klee::Expr> virtaddr,
+            klee::ref<klee::Expr> hostaddr,
+            unsigned size,
+            bool isIO, bool isCode)
+{
+    if (!isa<klee::ConstantExpr>(virtaddr))
+    {
+        m_s2e->getWarningsStream() << "[RemoteMemory] A symbolic virtual address has been passed to RemoteMemory. Cannot handle this case." << '\n';
+        return klee::ref<klee::Expr>();
+    }
+
+    uint64_t value = m_remoteMemoryIf->readMemory(state, cast<klee::ConstantExpr>(virtaddr)->getZExtValue(), size / 8);
+    return klee::ConstantExpr::create(value, size);
+}
+
+bool RemoteMemoryListener::write(S2EExecutionState *state,
+                klee::ref<klee::Expr> virtaddr,
+                klee::ref<klee::Expr> hostaddr,
+                klee::ref<klee::Expr> value,
+                bool isIO)
+{
+    if (!isa<klee::ConstantExpr>(virtaddr))
+    {
+        m_s2e->getWarningsStream() << "[RemoteMemory] A symbolic virtual address has been passed to RemoteMemory. Cannot handle this case." << '\n';
+        return false;
+    }
+
+    if (!isa<klee::ConstantExpr>(value))
+    {
+        m_s2e->getWarningsStream() << "[RemoteMemory] A symbolic value address has been passed to RemoteMemory. Cannot handle this case." << '\n';
+        return false;
+    }
+
+    m_remoteMemoryIf->writeMemory(state, 
+                                  cast<klee::ConstantExpr>(virtaddr)->getZExtValue(),
+                                  value->getWidth() / 8,
+                                  cast<klee::ConstantExpr>(value)->getZExtValue());
+
+    return true;
+}
+
+RemoteMemoryListener::~RemoteMemoryListener() 
+{
 }
 
 } /* namespace plugins */

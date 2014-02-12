@@ -27,82 +27,67 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Currently maintained by:
- *    Volodymyr Kuznetsov <vova.kuznetsov@epfl.ch>
  *    Vitaly Chipounov <vitaly.chipounov@epfl.ch>
+ *    Volodymyr Kuznetsov <vova.kuznetsov@epfl.ch>
  *
  * All contributors are listed in the S2E-AUTHORS file.
  */
 
-#include <s2e/Plugin.h>
-#include <s2e/S2E.h>
-#include <s2e/S2EExecutionState.h>
-#include <s2e/Utils.h>
+#ifndef S2E_PLUGINS_ANNOTATION_MEMORY_INTERCEPTOR_H
+#define S2E_PLUGINS_ANNOTATION_MEMORY_INTERCEPTOR_H
 
-#include <algorithm>
-#include <assert.h>
+#include <s2e/Plugin.h>
+#include <s2e/Plugins/CorePlugin.h>
+#include <s2e/S2EExecutionState.h>
+#include <s2e/Plugins/MemoryInterceptor.h>
+#include <s2e/Plugins/Annotation.h>
 
 namespace s2e {
+namespace plugins {
 
-using namespace std;
-
-CompiledPlugin::CompiledPlugins* CompiledPlugin::s_compiledPlugins = NULL;
-
-void Plugin::initialize()
+class MemoryInterceptorAnnotation : public Plugin
 {
-}
+    S2E_PLUGIN
 
-PluginState *Plugin::getPluginState(S2EExecutionState *s, PluginStateFactory f) const
+public:
+    MemoryInterceptorAnnotation(S2E* s2e);
+    virtual void initialize();
+private:
+    bool m_verbose;
+};
+
+class MemoryInterceptorAnnotationHandler : public MemoryAccessHandler
 {
-    if (m_CachedPluginS2EState == s) {
-        return m_CachedPluginState;
-    }
-    m_CachedPluginState = s->getPluginState(const_cast<Plugin*>(this), f);
-    m_CachedPluginS2EState = s;
-    return m_CachedPluginState;
-}
+public:
+    MemoryInterceptorAnnotationHandler(
+            S2E* s2e,
+            uint64_t address,
+            uint64_t size,
+            int mask,
+            std::string read_handler,
+            std::string write_handler);
 
-PluginsFactory::PluginsFactory()
-{
-    CompiledPlugin::CompiledPlugins *plugins = CompiledPlugin::getPlugins();
+    virtual klee::ref<klee::Expr> read(S2EExecutionState *state,
+            klee::ref<klee::Expr> virtaddr,
+            klee::ref<klee::Expr> hostaddr,
+            unsigned size,
+            bool isIO, bool isCode);
+    virtual bool write(S2EExecutionState *state,
+                klee::ref<klee::Expr> virtaddr,
+                klee::ref<klee::Expr> hostaddr,
+                klee::ref<klee::Expr> value,
+                bool isIO);
+private:
+    std::string m_readHandler;
+    std::string m_writeHandler;
+    Annotation* m_annotation;
+    std::map<uint64_t, klee::ref< klee::Expr > > m_writtenSymbolicValues;
 
-    foreach2(it, plugins->begin(), plugins->end()) {
-        registerPlugin(*it);
-    }
-}
+    virtual ~MemoryInterceptorAnnotationHandler() {}
+    klee::ref< klee::Expr > createSymbolicValue(S2EExecutionState *state, std::string name, unsigned size);
+};
 
-void PluginsFactory::registerPlugin(const PluginInfo* pluginInfo)
-{
-    assert(m_pluginsMap.find(pluginInfo->name) == m_pluginsMap.end());
-    //assert(find(pluginInfo, m_pluginsList.begin(), m_pluginsList.end()) ==
-      //                                              m_pluginsList.end());
-
-    m_pluginsList.push_back(pluginInfo);
-    m_pluginsMap.insert(make_pair(pluginInfo->name, pluginInfo));
-}
-
-const vector<const PluginInfo*>& PluginsFactory::getPluginInfoList() const
-{
-    return m_pluginsList;
-}
-
-const PluginInfo* PluginsFactory::getPluginInfo(const string& name) const
-{
-    PluginsMap::const_iterator it = m_pluginsMap.find(name);
-
-    if(it != m_pluginsMap.end())
-        return it->second;
-    else
-        return NULL;
-}
-
-Plugin* PluginsFactory::createPlugin(S2E* s2e, const string& name) const
-{
-    const PluginInfo* pluginInfo = getPluginInfo(name);
-    s2e->getMessagesStream() << "Creating plugin " << name << "\n";
-    if(pluginInfo)
-        return pluginInfo->instanceCreator(s2e, pluginInfo->opaque);
-    else
-        return NULL;
-}
-
+} // namespace plugins
 } // namespace s2e
+
+#endif // S2E_PLUGINS_ANNOTATION_MEMORY_INTERCEPTOR_H

@@ -512,6 +512,8 @@ s2eobj-y += s2e/Plugins/Searchers/CooperativeSearcher.o
 s2eobj-y += s2e/Plugins/HostFiles.o
 s2eobj-y += s2e/Plugins/LibraryCallMonitor.o
 s2eobj-y += s2e/Plugins/Searchers/MaxTbSearcher.o
+s2eobj-y += s2e/Plugins/StatGenerator.o
+s2eobj-y += s2e/Plugins/StateMigration.o
 
 #sqlite database is deprecated now
 #s2eobj-y += s2e/sqlite3.o
@@ -534,15 +536,21 @@ s2eobj-y += s2e/x64.o
 
 # Eurecom plugins for the Avatar framework:
 # http://www.s3.eurecom.fr/tools/avatar/
-s2eobj-y += s2e/Plugins/MemoryInterceptorMediator.o
+s2eobj-y += s2e/Plugins/MemoryInterceptor.o
+s2eobj-y += s2e/Plugins/MemoryInterceptorAnnotation.o
 s2eobj-y += s2e/Plugins/ArbitraryExecChecker.o
 s2eobj-y += s2e/Plugins/RemoteMemory.o
 
 s2eobj-y += s2e/Plugins/InstructionPrinter.o
-s2eobj-y += s2e/Plugins/MemInjector2.o
+#s2eobj-y += s2e/Plugins/MemInjector2.o
 s2eobj-y += s2e/Plugins/MemoryMonitor.o
-s2eobj-y += s2e/Plugins/RemoteControl.o
+#s2eobj-y += s2e/Plugins/RemoteControl.o
 s2eobj-y += s2e/Plugins/Searchers/MaxCodeCoverageSearcher.o
+s2eobj-y += s2e/Plugins/InstructionCountKiller.o
+
+s2eobj-y += s2e/Plugins/Avatar/IdentifyMemoryRegions.o
+
+
 
 ifeq ($(TARGET_BASE_ARCH), i386)
 	s2eobj-y += $(s2eobj-i386-y) $(s2eobj-win-y)
@@ -581,6 +589,15 @@ s2e/Plugins/X86ExceptionInterceptor.o: QEMU_CXXFLAGS+=-fno-inline
 s2e/Plugins/HostFiles.o: QEMU_CXXFLAGS+=-fno-inline
 s2e/Plugins/MemoryChecker.o: QEMU_CXXFLAGS+=-fno-inline
 s2e/S2EExecutor.o: QEMU_CXXFLAGS+=-fno-inline
+
+s2eobj-python-y = 
+s2eobj-python-y += s2e/Plugins/PythonInterface/PythonInterface.o
+
+s2e/Plugins/PythonInterface/PythonInterface.o: QEMU_CXXFLAGS+=-Wno-undef -Wno-unknown-pragmas
+
+ifdef CONFIG_PYTHON_PLUGIN
+   s2eobj-y += $(s2eobj-python-y)
+endif
 
 libs2e.a: $(s2eobj-y)
 

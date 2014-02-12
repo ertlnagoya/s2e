@@ -27,82 +27,45 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Currently maintained by:
- *    Volodymyr Kuznetsov <vova.kuznetsov@epfl.ch>
  *    Vitaly Chipounov <vitaly.chipounov@epfl.ch>
+ *    Volodymyr Kuznetsov <vova.kuznetsov@epfl.ch>
  *
  * All contributors are listed in the S2E-AUTHORS file.
  */
 
-#include <s2e/Plugin.h>
-#include <s2e/S2E.h>
-#include <s2e/S2EExecutionState.h>
-#include <s2e/Utils.h>
+#ifndef S2E_PLUGINS_PYTHONINTERFACE_H
+#define S2E_PLUGINS_PYTHONINTERFACE_H
 
-#include <algorithm>
-#include <assert.h>
+#include <s2e/Plugin.h>
+#include <s2e/Plugins/CorePlugin.h>
+#include <s2e/S2EExecutionState.h>
+
+#include <list>
+
+extern "C" {
+#include <Python.h>
+}
 
 namespace s2e {
+namespace plugins {
 
-using namespace std;
-
-CompiledPlugin::CompiledPlugins* CompiledPlugin::s_compiledPlugins = NULL;
-
-void Plugin::initialize()
+class PythonInterface : public Plugin
 {
-}
+//	friend static PyObject* register_plugin(PyObject*, PyObject*, PyObject*);
 
-PluginState *Plugin::getPluginState(S2EExecutionState *s, PluginStateFactory f) const
-{
-    if (m_CachedPluginS2EState == s) {
-        return m_CachedPluginState;
-    }
-    m_CachedPluginState = s->getPluginState(const_cast<Plugin*>(this), f);
-    m_CachedPluginS2EState = s;
-    return m_CachedPluginState;
-}
+    S2E_PLUGIN
+public:
+    PythonInterface(S2E* s2e);
 
-PluginsFactory::PluginsFactory()
-{
-    CompiledPlugin::CompiledPlugins *plugins = CompiledPlugin::getPlugins();
+    void initialize();
+    std::list<PluginInfo *> m_pluginInfo;
+    PyObject* m_s2e_module;
+    PyObject* m_s2e_instance;
+private:
 
-    foreach2(it, plugins->begin(), plugins->end()) {
-        registerPlugin(*it);
-    }
-}
+};
 
-void PluginsFactory::registerPlugin(const PluginInfo* pluginInfo)
-{
-    assert(m_pluginsMap.find(pluginInfo->name) == m_pluginsMap.end());
-    //assert(find(pluginInfo, m_pluginsList.begin(), m_pluginsList.end()) ==
-      //                                              m_pluginsList.end());
-
-    m_pluginsList.push_back(pluginInfo);
-    m_pluginsMap.insert(make_pair(pluginInfo->name, pluginInfo));
-}
-
-const vector<const PluginInfo*>& PluginsFactory::getPluginInfoList() const
-{
-    return m_pluginsList;
-}
-
-const PluginInfo* PluginsFactory::getPluginInfo(const string& name) const
-{
-    PluginsMap::const_iterator it = m_pluginsMap.find(name);
-
-    if(it != m_pluginsMap.end())
-        return it->second;
-    else
-        return NULL;
-}
-
-Plugin* PluginsFactory::createPlugin(S2E* s2e, const string& name) const
-{
-    const PluginInfo* pluginInfo = getPluginInfo(name);
-    s2e->getMessagesStream() << "Creating plugin " << name << "\n";
-    if(pluginInfo)
-        return pluginInfo->instanceCreator(s2e, pluginInfo->opaque);
-    else
-        return NULL;
-}
-
+} // namespace plugins
 } // namespace s2e
+
+#endif // S2E_PLUGINS_PYTHONINTERFACE_H

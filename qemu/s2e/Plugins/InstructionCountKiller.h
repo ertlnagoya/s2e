@@ -27,82 +27,54 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Currently maintained by:
- *    Volodymyr Kuznetsov <vova.kuznetsov@epfl.ch>
  *    Vitaly Chipounov <vitaly.chipounov@epfl.ch>
+ *    Volodymyr Kuznetsov <vova.kuznetsov@epfl.ch>
  *
  * All contributors are listed in the S2E-AUTHORS file.
  */
 
-#include <s2e/Plugin.h>
-#include <s2e/S2E.h>
-#include <s2e/S2EExecutionState.h>
-#include <s2e/Utils.h>
+#ifndef S2E_PLUGINS_INSTRUCTIONCOUNTKILLER_H
+#define S2E_PLUGINS_INSTRUCTIONCOUNTKILLER_H
 
-#include <algorithm>
-#include <assert.h>
+#include <s2e/Plugin.h>
+#include <s2e/Plugins/CorePlugin.h>
+#include <s2e/S2EExecutionState.h>
 
 namespace s2e {
+namespace plugins {
 
-using namespace std;
-
-CompiledPlugin::CompiledPlugins* CompiledPlugin::s_compiledPlugins = NULL;
-
-void Plugin::initialize()
+class InstructionCountKillerState : public PluginState
 {
-}
+	friend class InstructionCountKiller;
+public:
+	InstructionCountKillerState(uint64_t globalCount = 0, uint64_t stateCount = 0)
+		: m_globalInstructionCount(globalCount),
+		  m_stateInstructionCount(stateCount)
+	{
+	}
 
-PluginState *Plugin::getPluginState(S2EExecutionState *s, PluginStateFactory f) const
+	virtual PluginState *clone() const;
+	static PluginState *factory(Plugin *p, S2EExecutionState *s);
+private:
+	uint64_t m_globalInstructionCount;
+	uint64_t m_stateInstructionCount;
+};
+
+class InstructionCountKiller : public Plugin
 {
-    if (m_CachedPluginS2EState == s) {
-        return m_CachedPluginState;
-    }
-    m_CachedPluginState = s->getPluginState(const_cast<Plugin*>(this), f);
-    m_CachedPluginS2EState = s;
-    return m_CachedPluginState;
-}
+    S2E_PLUGIN
+public:
+    InstructionCountKiller(S2E* s2e): Plugin(s2e), m_maxGlobalInstructions(0), m_maxStateInstructions(0) {}
 
-PluginsFactory::PluginsFactory()
-{
-    CompiledPlugin::CompiledPlugins *plugins = CompiledPlugin::getPlugins();
+    void initialize();
+    void slotTranslateInstructionStart(ExecutionSignal* signal, S2EExecutionState* state, TranslationBlock* tb, uint64_t pc);
+    void slotExecuteInstructionStart(S2EExecutionState* state, uint64_t pc);
+private:
+    uint64_t m_maxGlobalInstructions;
+    uint64_t m_maxStateInstructions;
+};
 
-    foreach2(it, plugins->begin(), plugins->end()) {
-        registerPlugin(*it);
-    }
-}
-
-void PluginsFactory::registerPlugin(const PluginInfo* pluginInfo)
-{
-    assert(m_pluginsMap.find(pluginInfo->name) == m_pluginsMap.end());
-    //assert(find(pluginInfo, m_pluginsList.begin(), m_pluginsList.end()) ==
-      //                                              m_pluginsList.end());
-
-    m_pluginsList.push_back(pluginInfo);
-    m_pluginsMap.insert(make_pair(pluginInfo->name, pluginInfo));
-}
-
-const vector<const PluginInfo*>& PluginsFactory::getPluginInfoList() const
-{
-    return m_pluginsList;
-}
-
-const PluginInfo* PluginsFactory::getPluginInfo(const string& name) const
-{
-    PluginsMap::const_iterator it = m_pluginsMap.find(name);
-
-    if(it != m_pluginsMap.end())
-        return it->second;
-    else
-        return NULL;
-}
-
-Plugin* PluginsFactory::createPlugin(S2E* s2e, const string& name) const
-{
-    const PluginInfo* pluginInfo = getPluginInfo(name);
-    s2e->getMessagesStream() << "Creating plugin " << name << "\n";
-    if(pluginInfo)
-        return pluginInfo->instanceCreator(s2e, pluginInfo->opaque);
-    else
-        return NULL;
-}
-
+} // namespace plugins
 } // namespace s2e
+
+#endif // S2E_PLUGINS_INSTRUCTIONCOUNTKILLER_H

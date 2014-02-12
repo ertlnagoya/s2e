@@ -73,7 +73,7 @@ public:
     // store method table in globals so that
     // scripts can add functions written in Lua.
     lua_pushvalue(L, methods);
-    set(L, LUA_GLOBALSINDEX, T::className);
+    lua_setglobal(L, T::className);
 
     // hide metatable from Lua getmetatable()
     lua_pushvalue(L, methods);
@@ -170,7 +170,8 @@ public:
     userdataType *ud =
       static_cast<userdataType*>(luaL_checkudata(L, narg, T::className));
     if(!ud) {
-        luaL_typerror(L, narg, T::className);
+    	printf("Lua type error: %s\n", T::className);
+//        luaL_typeerror(L, narg, T::className);
         return NULL;
     }
     return ud->pT;  // pointer to T object
@@ -290,6 +291,7 @@ public:
   int writeParameter(lua_State *L);
   int writeMemorySymb(lua_State *L);
   int readMemory(lua_State *L);
+  int readMemoryConcretized(lua_State *L);
   int writeMemory(lua_State *L);
   int isSpeculative(lua_State *L);
   int getID(lua_State *L);

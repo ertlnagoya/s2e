@@ -33,37 +33,102 @@
  * All contributors are listed in the S2E-AUTHORS file.
  */
 
-#ifndef S2E_INSTRUCTION_PRINTER_H
-#define S2E_INSTRUCTION_PRINTER_H
+#ifndef S2E_PLUGINS_MEMORY_INTERCEPTOR_H
+#define S2E_PLUGINS_MEMORY_INTERCEPTOR_H
+
+#include <list>
 
 #include <s2e/Plugin.h>
 #include <s2e/Plugins/CorePlugin.h>
 #include <s2e/S2EExecutionState.h>
+#include <s2e/Plugins/MemoryAccess.h>
+
+
 
 namespace s2e {
 namespace plugins {
 
-class InstructionPrinter : public Plugin
+class MemoryAccessHandler
+{
+public:
+	MemoryAccessHandler(S2E* s2e, uint64_t address, uint64_t size, uint64_t mask)
+        : m_s2e(s2e),
+          m_address(address),
+          m_size(size),
+          m_mask(mask)
+    {
+    }
+
+    virtual uint64_t getAddress() 
+    {
+        return m_address;
+    }
+
+    virtual uint64_t getSize() 
+    {
+        return m_size;
+    }
+
+    virtual int getAccessMask() 
+    {
+        return m_mask;
+    }
+
+    virtual klee::ref<klee::Expr> read(S2EExecutionState *state,
+            klee::ref<klee::Expr> virtaddr,
+            klee::ref<klee::Expr> hostaddr,
+            unsigned size,
+            bool isIO, bool isCode)
+    {
+        return klee::ref<klee::Expr>();
+    }
+
+    virtual bool write(S2EExecutionState *state,
+                klee::ref<klee::Expr> virtaddr,
+                klee::ref<klee::Expr> hostaddr,
+                klee::ref<klee::Expr> value,
+                bool isIO)
+    {
+        return false;
+    }
+    virtual ~MemoryAccessHandler() {}
+protected:
+    S2E* m_s2e;
+    uint64_t m_address;
+    uint64_t m_size;
+    uint64_t m_mask;
+};
+
+class MemoryInterceptor : public Plugin
 {
     S2E_PLUGIN
 public:
-    InstructionPrinter(S2E* s2e): Plugin(s2e) {}
+    MemoryInterceptor(S2E* s2e);
 
+    klee::ref<klee::Expr> slotMemoryRead(S2EExecutionState *state,
+        klee::ref<klee::Expr> virtaddr,
+        klee::ref<klee::Expr> hostaddr,
+        unsigned size,
+        bool isIO, bool isCode);
+    bool slotMemoryWrite(S2EExecutionState *state,
+            klee::ref<klee::Expr> virtaddr,
+            klee::ref<klee::Expr> hostaddr,
+            klee::ref<klee::Expr> value,
+            bool isIO);
     void initialize();
-    void slotTranslateInstructionStart(
-            ExecutionSignal *signal,
-            S2EExecutionState *state,
-            TranslationBlock *tb,
-            uint64_t pc);
-    void slotExecuteInstruction(
-            S2EExecutionState *state,
-            uint64_t pc);
+    void addInterceptor(MemoryAccessHandler* handler);
+    void removeInterceptor(MemoryAccessHandler* handler);
+//    void registerInterceptors();
 
 private:
-    uint64_t m_exeID;
+    bool m_readInterceptorRegistered;
+    bool m_writeInterceptorRegistered;
+    std::list< MemoryAccessHandler* > m_listeners;
+    bool m_verbose;
+
 };
 
 } // namespace plugins
 } // namespace s2e
 
-#endif /* S2E_INSTRUCTION_PRINTER_H */
+#endif // S2E_PLUGINS_MEMORY_INTERCEPTOR_H

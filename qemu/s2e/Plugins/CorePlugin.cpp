@@ -340,49 +340,121 @@ void s2e_init_timers(S2E* s2e)
 
 static void s2e_trace_memory_access_slow(
         uint64_t vaddr, uint64_t haddr, uint8_t* buf, unsigned size,
-        int isWrite, int isIO)
+        int isWrite, int isIO, int isCode)
 {
     uint64_t value = 0;
-    unsigned copy_size = (size > sizeof(value)) ? sizeof (value) : size;
+    unsigned copy_size = (size > sizeof value) ? sizeof (value) : size;
     memcpy(&value, buf, copy_size);
-    klee::ref<klee::Expr> exprValue = klee::ConstantExpr::create(value, copy_size << 3);
 
     try {
-        klee::ref<klee::Expr> exprResult = g_s2e->getCorePlugin()->onDataMemoryAccess.emit(g_s2e_state,
+        g_s2e->getCorePlugin()->onDataMemoryAccess.emit(g_s2e_state,
             klee::ConstantExpr::create(vaddr, 64),
             klee::ConstantExpr::create(haddr, 64),
-            exprValue,
-            isWrite, isIO);
-
-        if (exprResult.isNull())
-        {
-            //Do nothing. HAHA!
-        }
-        else if (isa<klee::ConstantExpr>(exprResult))
-        {
-            if (cast<klee::ConstantExpr>(exprResult)->getWidth() / 8 != copy_size)
-            {
-                g_s2e->getWarningsStream() << "Return value size of onDataMemoryAccess signal handler differs from argument" << '\n';
-                //TODO: raise error
-                return;
-            }
-
-            uint64_t resultValue = cast<klee::ConstantExpr>(exprResult)->getZExtValue();
-
-            if (resultValue != value)
-                memcpy(buf, &resultValue, copy_size);
-        }
-        else
-        {
-            g_s2e->getDebugStream() << "DEBUG: onDataMemoryAccess returned symbolic value in concrete mode, switching to symbolic mode ..." << '\n';
-            g_s2e_state->jumpToSymbolicCpp();
-        }
-
-
-
+            klee::ConstantExpr::create(value, copy_size << 3),
+            isWrite, isIO, isCode);
     } catch(s2e::CpuExitException&) {
         s2e_longjmp(env->jmp_env, 1);
     }
+}
+
+static int s2e_hijack_memory_access_slow(
+        uint64_t vaddr, uint64_t haddr, uint8_t* val, unsigned size,
+        int isWrite, int isIO, int isCode)
+{
+    assert(g_s2e->getCorePlugin()->onHijackMemoryWrite.m_activeSignals <= 1);
+    assert(g_s2e->getCorePlugin()->onHijackMemoryRead.m_activeSignals <= 1);
+
+    if (size > sizeof(uint64_t))
+        size = sizeof(uint64_t);
+
+    try
+    {
+        if (isWrite)
+        {
+            uint64_t value = 0;
+
+            if (g_s2e->getCorePlugin()->onHijackMemoryWrite.empty())
+                return 0;
+
+            memcpy(&value, val, size);
+
+            bool hijacked = g_s2e->getCorePlugin()->onHijackMemoryWrite.emit(
+                    g_s2e_state,
+                    klee::ConstantExpr::create(vaddr, 64),
+                    klee::ConstantExpr::create(haddr, 64),
+                    klee::ConstantExpr::create(value, size * 8),
+                    isIO);
+
+            return hijacked ? 1 : 0;
+        }
+        else
+        {
+            if (g_s2e->getCorePlugin()->onHijackMemoryRead.empty())
+                return 0;
+
+            klee::ref<klee::Expr> exprValue = g_s2e->getCorePlugin()->onHijackMemoryRead.emit(
+                    g_s2e_state,
+                    klee::ConstantExpr::create(vaddr, 64),
+                    klee::ConstantExpr::create(haddr, 64),
+                    size * 8,
+                    isIO, isCode);
+
+            if (exprValue.isNull())
+            {
+                return 0;
+            }
+            else if (isa<klee::ConstantExpr>(exprValue))
+            {
+                uint64_t value = cast<klee::ConstantExpr>(exprValue)->getZExtValue();
+
+                //TODO: [J] Endianness?
+                memcpy(val, &value, size);
+                return 1;
+            }
+            else if (g_s2e_state->isRunningConcrete())
+            {
+                //If this is not the first instruction in the translation block
+                if (g_s2e_state->getPc() != g_s2e_state->getTb()->pc) {
+                    g_s2e->getWarningsStream()
+                            << "Switching to symbolic mode because the "
+                            << "onHijackMemoryRead signal in the CorePlugin "
+                            << "returned a symbolic value in concrete mode.\n"
+                            << "This most likely happened "
+                            << "because one of your plugins wants to switch "
+                            << "to symbolic mode. The problem is that some instructions\n"
+                            << "already have been executed in the current translation block and will "
+                            << "be reexecuted in symbolic mode. This is fine as long as\n"
+                            << "those instructions do not have any undesired side effects. Verify the "
+                            << "translation block containing PC " << hexval(g_s2e_state->getPc())
+                            << " does not have any\n"
+                            << "side effects or switch to symbolic execution mode before "
+                            << "if it does (e.g., by placing an Annotation at the beginning of the\n"
+                            << "translation block)."
+                            << "\n\tAnother side effect of emitting symbolic values while not in symbolic "
+                            << "mode is that you will have an unused value in your\n"
+                            << "list of symbolic values."
+                            << '\n';
+                }
+
+
+                g_s2e->getDebugStream() << "DEBUG: onDataMemoryAccess returned symbolic value at PC "
+                        << hexval(g_s2e_state->getPc()) << " in concrete mode, switching to symbolic mode ..." << '\n';
+                g_s2e_state->jumpToSymbolicCpp();
+            }
+            else
+            {
+                assert(false && "This function cannot be called when S2E is in symbolic mode. Something went wrong.");
+            }
+        }
+    }
+    catch(s2e::CpuExitException&)
+    {
+        s2e_longjmp(env->jmp_env, 1);
+    }
+
+    //Dummy return, should not be reached
+    assert(false && "This point should not be reached, something went wrong");
+    return 0;
 }
 
 /**
@@ -391,10 +463,23 @@ static void s2e_trace_memory_access_slow(
  */
 void s2e_trace_memory_access(
         uint64_t vaddr, uint64_t haddr, uint8_t* buf, unsigned size,
-        int isWrite, int isIO)
+        int isWrite, int isIO, int isCode)
 {
     if(unlikely(!g_s2e->getCorePlugin()->onDataMemoryAccess.empty())) {
-        s2e_trace_memory_access_slow(vaddr, haddr, buf, size, isWrite, isIO);
+        s2e_trace_memory_access_slow(vaddr, haddr, buf, size, isWrite, isIO, isCode);
+    }
+}
+
+
+int s2e_hijack_memory_access(uint64_t vaddr, uint64_t haddr, uint8_t* value, unsigned size, int isWrite, int isIO, int isCode)
+{
+    if(likely(g_s2e->getCorePlugin()->onHijackMemoryRead.empty() && g_s2e->getCorePlugin()->onHijackMemoryWrite.empty()))
+    {
+        return 0;
+    }
+    else
+    {
+        return s2e_hijack_memory_access_slow(vaddr, haddr, value, size, isWrite, isIO, isCode);
     }
 }
 

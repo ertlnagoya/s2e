@@ -35,6 +35,8 @@
 #include <target-arm/cpu.h>
 #endif
 
+#include <strings.h>
+
 /* Board init.  */
 
 /* The AB and PB boards both use the same core, just with different
@@ -43,24 +45,43 @@
 
 // static struct arm_boot_info versatile_binfo;
 
+static off_t get_file_size(const char * path)
+{
+	struct stat64 stat;
+
+	if (stat64(path, &stat))
+	{
+		printf("ERROR: Getting file size for file %s\n", path);
+		return 0;
+	}
+
+	return stat.st_size;
+}
+
 static QDict * load_configuration(const char * filename)
 {
     int file = open(filename, O_RDONLY);
-    off_t filesize = lseek(file, 0, SEEK_END);
+    off_t filesize = get_file_size(filename);
     char * filedata = NULL;
     ssize_t err;
     QObject * obj;
 
-    lseek(file, 0, SEEK_SET);
+    if (file == -1)
+    {
+        printf("ERROR: configurable_machine cannot find your machine configuration file '%s'\n", filename);
+        exit(1);
+    }
+
+    printf("Trying to allocate %" PRId64 " bytes\n", filesize);
 
     filedata = g_malloc(filesize + 1);
-    memset(filedata, 0, filesize + 1);
 
     if (!filedata)
     {
-        fprintf(stderr, "Out of memory\n");
+        fprintf(stderr, "configurable_machine: Out of memory while loading configuration ...\n");
         exit(1);
     }
+    memset(filedata, 0, filesize + 1);
 
     err = read(file, filedata, filesize);
 
@@ -260,6 +281,8 @@ static void board_init(ram_addr_t ram_size,
 {
     CPUArchState * cpu;
     QDict * conf = NULL;
+    int instruction_endianness = DEVICE_LITTLE_ENDIAN;
+
     uint64_t entry_address=0;
 
     //Load configuration file
@@ -293,10 +316,41 @@ static void board_init(ram_addr_t ram_size,
         exit(1);
     }
 
+
+
 #ifdef CONFIG_S2E
     s2e_register_cpu(g_s2e, g_s2e_state, cpu);
 #endif
 
+    if (qdict_haskey(conf, "instruction_endianness"))
+    {
+        const char * value;
+        g_assert(qobject_type(qdict_get(conf, "instruction_endianness")) == QTYPE_QSTRING);
+
+        value = qdict_get_str(conf, "instruction_endianness");
+
+        if (strcasecmp(value, "big") == 0)
+            instruction_endianness = DEVICE_BIG_ENDIAN;
+        else if (strcasecmp(value, "little") == 0)
+            instruction_endianness = DEVICE_LITTLE_ENDIAN;
+        else
+            g_assert(0); //If the instruction_endianness key is specified, it must have the value 'little' or 'big'.
+
+#if defined(TARGET_ARM)
+        //TODO: What if host is big endian?
+        if (instruction_endianness == DEVICE_BIG_ENDIAN)
+        {
+            ((CPUARMState *) cpu)->bswap_code = 1;
+        }
+        else
+        {
+            ((CPUARMState *) cpu)->bswap_code = 0;
+        }
+#else /* defined(TARGET_ARM) */
+        //TODO: endianness conversion for non-ARM platforms
+#endif /* defined(TARGET_ARM) */
+
+    }
     //Configure memory
     if (qdict_haskey(conf, "memory_map"))
     {
@@ -319,6 +373,8 @@ static void board_init(ram_addr_t ram_size,
             uint64_t address;
             int is_first_mapping = TRUE;
             int alias_num = 0;
+            int endianness = DEVICE_NATIVE_ENDIAN;
+
  //           void * ram_ptr;
 
             g_assert(qobject_type(entry->value) == QTYPE_QDICT);
@@ -334,6 +390,23 @@ static void board_init(ram_addr_t ram_size,
             name = qdict_get_str(mapping, "name");
             is_rom = qdict_haskey(mapping, "is_rom") && qdict_get_bool(mapping, "is_rom");
             size = qdict_get_int(mapping, "size");
+
+            if (qdict_haskey(mapping, "endianness"))
+            {
+            	const char * value;
+            	g_assert(qobject_type(qdict_get(mapping, "endianness")) == QTYPE_QSTRING);
+
+            	value = qdict_get_str(mapping, "endianness");
+
+            	if (strcasecmp(value, "big") == 0)
+            		endianness = DEVICE_BIG_ENDIAN;
+            	else if (strcasecmp(value, "little") == 0)
+            		endianness = DEVICE_LITTLE_ENDIAN;
+            	else
+            		g_assert(0);
+
+
+            }
 
             ram =  g_new(MemoryRegion, 1);
             g_assert(ram);
@@ -352,7 +425,7 @@ static void board_init(ram_addr_t ram_size,
 
                 if (is_first_mapping)
                 {
-                    printf("Configurable: Adding memory region %s (size: 0x%lx) at address 0x%lx\n", name, size, address);
+                    printf("Configurable: Adding memory region %s (size: 0x%" PRIx64 ") at address 0x%" PRIx64 "\n", name, size, address);
                     memory_region_add_subregion(sysmem, address, ram);
                     is_first_mapping = FALSE;
 
@@ -370,7 +443,7 @@ static void board_init(ram_addr_t ram_size,
 
                     snprintf(alias_name, sizeof(alias_name), "%s.alias_%d", name, alias_num);
 
-                    printf("Configurable: Adding memory region %s (size: 0x%lx) at address 0x%lx\n", alias_name, size, address);
+                    printf("Configurable: Adding memory region %s (size: 0x%" PRIx64 ") at address 0x%" PRIx64 "\n", alias_name, size, address);
                     memory_region_init_alias(ram_alias, alias_name, ram, 0, size);
                     memory_region_add_subregion(sysmem, address, ram_alias);
 
@@ -405,16 +478,16 @@ static void board_init(ram_addr_t ram_size,
                     strcat(relative_filename, filename);
 
                     file = open(relative_filename, O_RDONLY | O_BINARY);
+                    data_size = get_file_size(relative_filename);
                     g_free(relative_filename);
                 }
                 else
                 {
                     file = open(filename, O_RDONLY | O_BINARY);
+                    data_size = get_file_size(filename);
                 }
 
-                data_size = lseek(file, 0, SEEK_END);
-                lseek(file, 0, SEEK_SET);
-
+                printf("Configurable: Inserting %" PRIx64 " bytes of data in memory region %s\n", data_size, name);
                 g_assert(data_size <= size); //Size of data to put into a RAM region needs to fit in the RAM region
 
                 data = g_malloc(data_size);
@@ -426,7 +499,7 @@ static void board_init(ram_addr_t ram_size,
                 close(file);
 
                 //And copy the data to the memory, if it is initialized
-                printf("Configurable: Copying 0x%lx byte of data from file %s to address 0x%lx\n", data_size, filename, address);
+                printf("Configurable: Copying 0x%" PRIx64 " byte of data from file %s to address 0x%" PRIx64 "\n", data_size, filename, address);
 //                ram_ptr = qemu_get_ram_ptr(memory_region_get_ram_addr(ram));
 //                memcpy(ram_ptr, data, data_size);
 //                qemu_put_ram_ptr(ram_ptr);

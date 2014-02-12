@@ -113,16 +113,16 @@ RET emit(OPERATOR_PARAM_DECL) {
     for (last = m_size - 1; last >= 0 && !m_funcs[last]; last--);
 
     for (int i=0; i < last; ++i) {
-        if (m_funcs[i]) {
-            m_funcs[i]->operator ()(CALL_PARAMS);
-        }
-    }
+         if (m_funcs[i]) {
+             m_funcs[i]->operator ()(CALL_PARAMS);
+         }
+     }
 
     if (last >= 0)
         return m_funcs[last]->operator ()(CALL_PARAMS);
     else
         return RET();
-}
+ }
 
 
 #undef SIGNAL_CLASS

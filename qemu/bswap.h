@@ -3,16 +3,18 @@
 
 #include "config-host.h"
 
+#define CONFIG_S2E_NO_BYTESWAP_OPTIMIZE
+
 #include <inttypes.h>
 #include "softfloat.h"
 
-#ifdef CONFIG_MACHINE_BSWAP_H
+#if defined(CONFIG_MACHINE_BSWAP_H) && !defined(CONFIG_S2E_NO_BYTESWAP_OPTIMIZE)
 #include <sys/endian.h>
 #include <sys/types.h>
 #include <machine/bswap.h>
 #else
 
-#ifdef CONFIG_BYTESWAP_H
+#if defined(CONFIG_BYTESWAP_H) && !defined(CONFIG_S2E_NO_BYTESWAP_OPTIMIZE)
 #include <byteswap.h>
 #else
 
@@ -530,7 +532,7 @@ static inline void stfq_le_p(void *ptr, float64 v)
 
 static inline int lduw_be_p(const void *ptr)
 {
-#if defined(__i386__)
+#if defined(__i386__) && !defined(CONFIG_S2E_NO_BYTESWAP_OPTIMIZE)
     int val;
     asm volatile ("movzwl %1, %0\n"
                   "xchgb %b0, %h0\n"
@@ -545,7 +547,7 @@ static inline int lduw_be_p(const void *ptr)
 
 static inline int ldsw_be_p(const void *ptr)
 {
-#if defined(__i386__)
+#if defined(__i386__) && !defined(CONFIG_S2E_NO_BYTESWAP_OPTIMIZE)
     int val;
     asm volatile ("movzwl %1, %0\n"
                   "xchgb %b0, %h0\n"
@@ -560,8 +562,9 @@ static inline int ldsw_be_p(const void *ptr)
 
 static inline int ldl_be_p(const void *ptr)
 {
-#if defined(__i386__) || defined(__x86_64__)
+#if (defined(__i386__) || defined(__x86_64__)) && !defined(CONFIG_S2E_NO_BYTESWAP_OPTIMIZE)
     int val;
+
     asm volatile ("movl %1, %0\n"
                   "bswap %0\n"
                   : "=r" (val)
@@ -597,7 +600,7 @@ static inline void stw_be_p(void *ptr, int v)
 
 static inline void stl_be_p(void *ptr, int v)
 {
-#if defined(__i386__) || defined(__x86_64__)
+#if (defined(__i386__) || defined(__x86_64__)) && !defined(CONFIG_S2E_NO_BYTESWAP_OPTIMIZE)
     asm volatile ("bswap %0\n"
                   "movl %0, %1\n"
                   : "=r" (v)

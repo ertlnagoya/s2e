@@ -158,7 +158,6 @@ bool Annotation::initSection(const std::string &entry, const std::string &cfgnam
 
     bool ok;
 
-
     e.isActive = cfg->getBool(entry + ".active", false, &ok);
     if (!ok) {
         os << "You must specify whether the entry is active in " << entry << ".active!" << '\n';
@@ -196,11 +195,22 @@ bool Annotation::initSection(const std::string &entry, const std::string &cfgnam
     } else if (std::find(cfgkeys.begin(), cfgkeys.end(), "instructionAnnotation") != cfgkeys.end())	{
         e.annotation = cfg->getString(entry + ".instructionAnnotation", e.annotation, &ok);
         e.isCallAnnotation = false;
+    } else if (std::find(cfgkeys.begin(), cfgkeys.end(), "memoryAnnotation") != cfgkeys.end()) {
+        MemoryAnnotationCfgEntry memAnnotation;
+
+        e.annotation = cfg->getString(entry + ".memoryAnnotation", e.annotation, &ok);
+        e.isCallAnnotation = false;
+        memAnnotation.annotation = e.annotation;
+        memAnnotation.rangeStart = e.address;
+        memAnnotation.rangeSize = cfg->getInt(entry + ".size", 0, &ok);
+
+        m_memoryAnnotations.push_back(memAnnotation);
     }
+
 
     // Assert that this is a properly attached annotation
     if (!ok || e.annotation=="") {
-        os << "You must specify either " << entry << ".callAnnotation or .instructionAnnotation!" << '\n';
+        os << "You must specify one of " << entry << ".callAnnotation, .memoryAnnotation or .instructionAnnotation!" << '\n';
         return false;
     }
 
@@ -224,6 +234,12 @@ bool Annotation::initSection(const std::string &entry, const std::string &cfgnam
     ne = new AnnotationCfgEntry(e);
     m_entries.insert(ne);
 
+    if (m_memoryAnnotations.size() > 0)
+    {
+        s2e()->getDebugStream() << "Annotation: Registering for memory accesses" << '\n';
+        s2e()->getCorePlugin()->onDataMemoryAccess.connect(sigc::mem_fun(*this, &Annotation::onDataMemoryAccess));
+    }
+
     return true;
 }
 
@@ -234,7 +250,7 @@ void Annotation::onStateKill(S2EExecutionState* state)
     LUAAnnotation luaAnnotation(this, state);
     S2ELUAExecutionState lua_s2e_state(state);
 
-    lua_getfield(L, LUA_GLOBALSINDEX, m_onStateKill.c_str());
+    lua_getglobal(L, m_onStateKill.c_str());
     Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
     Lunar<LUAAnnotation>::push(L, &luaAnnotation);
     lua_call(L, 2, 0);
@@ -245,9 +261,79 @@ void Annotation::onTimer()
     lua_State *L = s2e()->getConfig()->getState();
     LUAAnnotation luaAnnotation(this, NULL);
 
-    lua_getfield(L, LUA_GLOBALSINDEX, m_onTimer.c_str());
+    lua_getglobal(L, m_onTimer.c_str());
     Lunar<LUAAnnotation>::push(L, &luaAnnotation);
     lua_call(L, 1, 0);
+}
+
+void Annotation::onDataMemoryAccess(S2EExecutionState *state,
+        klee::ref<klee::Expr> virtualAddress,
+        klee::ref<klee::Expr> hostAddress,
+        klee::ref<klee::Expr> value,
+        bool isWrite, bool isIO, bool isCode)
+{
+    //TODO: hostAddress not taken into account
+    if (!isa<klee::ConstantExpr>(virtualAddress))
+    {
+        s2e()->getWarningsStream() << "[Annotations] Cannot handle a symbolic address" << '\n';
+        return;
+    }
+
+    uint64_t address = cast<klee::ConstantExpr>(virtualAddress)->getZExtValue();
+    uint64_t width = value->getWidth();
+    uint64_t concreteValue = 0;
+
+    if (!isa<klee::ConstantExpr>(value))
+    {
+        s2e()->getWarningsStream() << "[Annotations] Do not know how to handle a symbolic value" << '\n';
+    }
+    else
+    {
+        concreteValue  = cast<klee::ConstantExpr>(value)->getZExtValue();
+    }
+
+    for (std::list<MemoryAnnotationCfgEntry>::const_iterator itr = m_memoryAnnotations.begin();
+         itr != m_memoryAnnotations.end();
+         itr++)
+    {
+        if (itr->rangeStart <= address && itr->rangeStart + itr->rangeSize >= address)
+        {
+            lua_State *L = s2e()->getConfig()->getState();
+            LUAAnnotation luaAnnotation(this, state);
+            S2ELUAExecutionState lua_s2e_state(state);
+
+            lua_getglobal(L, itr->annotation.c_str());
+
+            Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
+            Lunar<LUAAnnotation>::push(L, &luaAnnotation);
+            lua_pushnumber(L, address);
+            lua_pushnumber(L, width / 8);
+            lua_pushnumber(L, concreteValue);
+            lua_pushboolean(L, isWrite);
+            lua_pushboolean(L, isIO);
+
+            lua_call(L, 7, 0);
+            /*
+            lua_call(L, 7, 2);
+
+            bool is_symbolic = lua_toboolean(L, lua_gettop(L) - 1);
+
+            //TODO: What if serveral annotations exist?
+            if (is_symbolic)
+            {
+                std::string value_name(lua_tostring(L, lua_gettop(L)));
+                lua_pop(L, 2);
+                return state->createSymbolicValue(value_name, value->getWidth());
+            }
+            else
+            {
+                uint64_t new_value = lua_tonumber(L, lua_gettop(L));
+                lua_pop(L, 2);
+                return klee::ref<klee::Expr>(klee::ConstantExpr::create(new_value, value->getWidth()));
+            }
+            */
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -421,7 +507,7 @@ void Annotation::invokeAnnotation(
     luaAnnotation.m_isReturn = !isCall;
     luaAnnotation.m_isInstruction = isInstruction;
 
-    lua_getfield(L, LUA_GLOBALSINDEX, entry->annotation.c_str());
+    lua_getglobal(L, entry->annotation.c_str());
     Lunar<S2ELUAExecutionState>::push(L, &lua_s2e_state);
     Lunar<LUAAnnotation>::push(L, &luaAnnotation);
     lua_call(L, 2, 0);
@@ -523,6 +609,9 @@ Lunar<LUAAnnotation>::RegType LUAAnnotation::methods[] = {
   LUNAR_DECLARE_METHOD(LUAAnnotation, isCall),
   LUNAR_DECLARE_METHOD(LUAAnnotation, getValue),
   LUNAR_DECLARE_METHOD(LUAAnnotation, setValue),
+  LUNAR_DECLARE_METHOD(LUAAnnotation, printDebug),
+  LUNAR_DECLARE_METHOD(LUAAnnotation, printMessage),
+  LUNAR_DECLARE_METHOD(LUAAnnotation, printWarning),
   LUNAR_DECLARE_METHOD(LUAAnnotation, exit),
   {0,0}
 };
@@ -639,6 +728,30 @@ int LUAAnnotation::getValue(lua_State *L)
 
   lua_pushnumber(L, value);
   return 1;
+}
+
+int LUAAnnotation::printDebug(lua_State* L)
+{
+	std::string str = luaL_checkstring(L, 1);
+
+	g_s2e->getDebugStream() << "LUA annotation output: " << str << '\n';
+	return 0;
+}
+
+int LUAAnnotation::printMessage(lua_State* L)
+{
+	std::string str = luaL_checkstring(L, 1);
+
+	g_s2e->getMessagesStream() << "LUA annotation output: " << str << '\n';
+	return 0;
+}
+
+int LUAAnnotation::printWarning(lua_State* L)
+{
+	std::string str = luaL_checkstring(L, 1);
+
+	g_s2e->getWarningsStream() << "LUA annotation output: " << str << '\n';
+	return 0;
 }
 
 int LUAAnnotation::exit(lua_State *L)

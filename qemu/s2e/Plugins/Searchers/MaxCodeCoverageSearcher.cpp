@@ -67,6 +67,8 @@ void MaxCodeCoverageSearcher::initialize()
     s2e()->getCorePlugin()->onTranslateBlockStart.connect(
             sigc::mem_fun(*this, &MaxCodeCoverageSearcher::slotTranslateBlockStart));
 
+    s2e()->getCorePlugin()->onStateFork.connect(sigc::mem_fun(*this, &MaxCodeCoverageSearcher::slotStateFork));
+
     assert(s2e()->getPlugin("Initializer") && "MaxCodeCoverageSearcher requires Initializer plugin");
     static_cast<Initializer *>(s2e()->getPlugin("Initializer"))->onInitialize.connect(sigc::mem_fun(*this, &MaxCodeCoverageSearcher::slotInitialize));
 
@@ -74,19 +76,41 @@ void MaxCodeCoverageSearcher::initialize()
 
 void MaxCodeCoverageSearcher::slotInitialize(S2EExecutionState *state)
 {
+    klee::Searcher *previousSearcher = 0;
+    klee::Searcher *newSearcher = 0;
+
     s2e()->getDebugStream() << "MaxCodeCoverageSearcher::initializeSearcher called" << '\n';
 
-//    m_parentSearcher = s2e()->getExecutor()->getSearcher();
-//    assert(m_parentSearcher);
+    previousSearcher = s2e()->getExecutor()->getSearcher();
+
+    assert(previousSearcher && "No searcher set in klee");
+
     if (m_timeBudget == 0.0)
     {
-        s2e()->getExecutor()->setSearcher(this);
+        newSearcher = this;
     }
     else
     {
         m_batchingSearcher = new klee::BatchingSearcher(this, m_timeBudget, 1000);
+        newSearcher = m_batchingSearcher;
         s2e()->getExecutor()->setSearcher(m_batchingSearcher);
     }
+
+    newSearcher->addState(state, state);
+
+    while (!previousSearcher->empty())
+    {
+        klee::ExecutionState& prevState = previousSearcher->selectState();
+
+        if (static_cast<S2EExecutionState *>(&prevState)->getID() != state->getID())
+            newSearcher->addState(&prevState, static_cast<klee::ExecutionState *>(state));
+
+        previousSearcher->removeState(&prevState, static_cast<klee::ExecutionState *>(state));
+    }
+
+    delete previousSearcher;
+
+    s2e()->getExecutor()->setSearcher(newSearcher);
 }
 
 struct CodeCoverageComparator
@@ -144,8 +168,8 @@ void MaxCodeCoverageSearcher::update(klee::ExecutionState *current,
         s2e()->getDebugStream() << "MaxCodeCoverageSearcher::update called" << '\n';
 //    m_parentSearcher->update(current, addedStates, removedStates);
 
-    if (current && m_states.empty())
-        m_states.push_back(static_cast<S2EExecutionState *>(current));
+//    if (current && m_states.empty())
+//        m_states.push_back(static_cast<S2EExecutionState *>(current));
 
 
     foreach2(it, removedStates.begin(), removedStates.end()) {
@@ -178,15 +202,19 @@ MaxCodeCoverageSearcher::~MaxCodeCoverageSearcher()
 MaxCodeCoverageSearcherState::MaxCodeCoverageSearcherState()
     : m_metric(0),
       m_plugin(0),
-      m_state(0)
+      m_state(0),
+      m_executedBasicBlocks(0)
 {
 }
 
 MaxCodeCoverageSearcherState::MaxCodeCoverageSearcherState(S2EExecutionState *s, Plugin *p)
     : m_metric(0),
       m_plugin(static_cast<MaxCodeCoverageSearcher*>(p)),
-      m_state(s)
+      m_state(s),
+      m_executedBasicBlocks(0)
 {
+    if (static_cast<MaxCodeCoverageSearcher *>(p)->m_perStateCodeCoverage)
+        m_executedBasicBlocks = new std::map<uint64_t, uint64_t>();
 }
 
 MaxCodeCoverageSearcherState::~MaxCodeCoverageSearcherState()
@@ -195,12 +223,20 @@ MaxCodeCoverageSearcherState::~MaxCodeCoverageSearcherState()
 
 PluginState *MaxCodeCoverageSearcherState::clone() const
 {
-    return new MaxCodeCoverageSearcherState(*this);
+    MaxCodeCoverageSearcherState *newState = new MaxCodeCoverageSearcherState();
+    newState->m_metric = m_metric;
+    newState->m_plugin = m_plugin;
+    newState->m_state = m_state;
+    if (m_executedBasicBlocks)
+        newState->m_executedBasicBlocks = new std::map<uint64_t, uint64_t>(*m_executedBasicBlocks);
+
+    return newState;
 }
 
 PluginState *MaxCodeCoverageSearcherState::factory(Plugin *p, S2EExecutionState *s)
 {
     MaxCodeCoverageSearcherState *ret = new MaxCodeCoverageSearcherState(s, p);
+    p->s2e()->getWarningsStream() << "Creating new MaxCodeCoverageSearcherState" << '\n';
     return ret;
 }
 
@@ -226,15 +262,20 @@ void MaxCodeCoverageSearcher::slotExecuteBlockStart(
 
     if (m_perStateCodeCoverage)
     {
-        plgState->m_metric = penaltyFunction(plgState->m_metric, plgState->m_executedBasicBlocks[block_pc]);
+        plgState->m_metric = penaltyFunction(plgState->m_metric, plgState->m_executedBasicBlocks->operator[](block_pc));
+        plgState->m_executedBasicBlocks->operator[](block_pc) += 1;
     }
     else
     {
         plgState->m_metric = penaltyFunction(plgState->m_metric, m_executedBasicBlocks[block_pc]);
+        m_executedBasicBlocks[block_pc] += 1;
     }
+}
 
-    plgState->m_executedBasicBlocks[block_pc] += 1;
-    m_executedBasicBlocks[block_pc] += 1;
+void MaxCodeCoverageSearcher::slotStateFork(S2EExecutionState* originalState,
+                    const std::vector<S2EExecutionState*>& newStates,
+                    const std::vector<klee::ref<klee::Expr> >& newConditions)
+{
 }
 
 

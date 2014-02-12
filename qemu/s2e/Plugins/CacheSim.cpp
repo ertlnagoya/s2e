@@ -558,17 +558,17 @@ void CacheSim::onMemoryAccess(S2EExecutionState *state,
     }
 }
 
-klee::ref<klee::Expr> CacheSim::onDataMemoryAccess(S2EExecutionState *state,
+void CacheSim::onDataMemoryAccess(S2EExecutionState *state,
                               klee::ref<klee::Expr> address,
                               klee::ref<klee::Expr> hostAddress,
                               klee::ref<klee::Expr> value,
-                              bool isWrite, bool isIO)
+                              bool isWrite, bool isIO, bool isCode)
 {
     if(!isa<ConstantExpr>(hostAddress)) {
         s2e()->getWarningsStream()
                 << "Warning: CacheSim do not support symbolic addresses"
                 << '\n';
-        return value;
+        return;
     }
 
     uint64_t constAddress;
@@ -582,8 +582,6 @@ klee::ref<klee::Expr> CacheSim::onDataMemoryAccess(S2EExecutionState *state,
     }
 
     onMemoryAccess(state, constAddress, size, isWrite, isIO, false);
-
-    return value;
 }
 
 void CacheSim::onExecuteBlockStart(S2EExecutionState *state, uint64_t pc,

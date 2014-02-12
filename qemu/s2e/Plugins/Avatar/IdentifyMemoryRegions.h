@@ -27,82 +27,62 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Currently maintained by:
- *    Volodymyr Kuznetsov <vova.kuznetsov@epfl.ch>
  *    Vitaly Chipounov <vitaly.chipounov@epfl.ch>
+ *    Volodymyr Kuznetsov <vova.kuznetsov@epfl.ch>
  *
  * All contributors are listed in the S2E-AUTHORS file.
  */
 
-#include <s2e/Plugin.h>
-#include <s2e/S2E.h>
-#include <s2e/S2EExecutionState.h>
-#include <s2e/Utils.h>
+#ifndef S2E_PLUGINS_IDENTIFY_MEMORY_REGIONS_H
+#define S2E_PLUGINS_IDENTIFY_MEMORY_REGIONS_H
 
-#include <algorithm>
-#include <assert.h>
+#include <s2e/Plugin.h>
+#include <s2e/Plugins/CorePlugin.h>
+#include <s2e/S2EExecutionState.h>
 
 namespace s2e {
+namespace plugins {
 
-using namespace std;
-
-CompiledPlugin::CompiledPlugins* CompiledPlugin::s_compiledPlugins = NULL;
-
-void Plugin::initialize()
+struct AccessCount
 {
-}
+	uint64_t execute;
+	uint64_t read;
+	uint64_t write;
+	uint64_t stack;
+	uint64_t io;
+};
 
-PluginState *Plugin::getPluginState(S2EExecutionState *s, PluginStateFactory f) const
+class IdentifyMemoryRegions : public Plugin
 {
-    if (m_CachedPluginS2EState == s) {
-        return m_CachedPluginState;
-    }
-    m_CachedPluginState = s->getPluginState(const_cast<Plugin*>(this), f);
-    m_CachedPluginS2EState = s;
-    return m_CachedPluginState;
-}
+    S2E_PLUGIN
+public:
+    IdentifyMemoryRegions(S2E* s2e): Plugin(s2e) {}
 
-PluginsFactory::PluginsFactory()
-{
-    CompiledPlugin::CompiledPlugins *plugins = CompiledPlugin::getPlugins();
+    void initialize();
+    void slotTranslateBlockEnd(ExecutionSignal*, S2EExecutionState *state,
+        TranslationBlock *tb, uint64_t pc, bool isTargetValid, uint64_t staticTarget);
+    void slotExecuteBlockEnd(S2EExecutionState* state, uint64_t pc);
+    void slotDataMemoryAccess(S2EExecutionState *state,
+                                       klee::ref<klee::Expr> address,
+                                       klee::ref<klee::Expr> hostAddress,
+                                       klee::ref<klee::Expr> value,
+                                       bool isWrite, bool isIO, bool isCode);
+    void slotStateKill(S2EExecutionState* state);
 
-    foreach2(it, plugins->begin(), plugins->end()) {
-        registerPlugin(*it);
-    }
-}
+private:
+    uint64_t getPageAddress(uint64_t address);
+    bool isShadowMemoryIdentical(uint64_t address, unsigned size, uint64_t value);
+    void shadowMemoryWrite(uint64_t address, unsigned size, uint64_t value);
+    bool isShadowMemoryInitialized(uint64_t address, unsigned size);
+    bool m_traceBlockTranslation;
+    bool m_traceBlockExecution;
+    bool m_traceMemoryAccesses;
+    uint64_t m_pageSize;
+    std::map<uint64_t, AccessCount> m_accesses;
+    std::map<uint64_t, uint8_t> m_shadowMemory;
+};
 
-void PluginsFactory::registerPlugin(const PluginInfo* pluginInfo)
-{
-    assert(m_pluginsMap.find(pluginInfo->name) == m_pluginsMap.end());
-    //assert(find(pluginInfo, m_pluginsList.begin(), m_pluginsList.end()) ==
-      //                                              m_pluginsList.end());
-
-    m_pluginsList.push_back(pluginInfo);
-    m_pluginsMap.insert(make_pair(pluginInfo->name, pluginInfo));
-}
-
-const vector<const PluginInfo*>& PluginsFactory::getPluginInfoList() const
-{
-    return m_pluginsList;
-}
-
-const PluginInfo* PluginsFactory::getPluginInfo(const string& name) const
-{
-    PluginsMap::const_iterator it = m_pluginsMap.find(name);
-
-    if(it != m_pluginsMap.end())
-        return it->second;
-    else
-        return NULL;
-}
-
-Plugin* PluginsFactory::createPlugin(S2E* s2e, const string& name) const
-{
-    const PluginInfo* pluginInfo = getPluginInfo(name);
-    s2e->getMessagesStream() << "Creating plugin " << name << "\n";
-    if(pluginInfo)
-        return pluginInfo->instanceCreator(s2e, pluginInfo->opaque);
-    else
-        return NULL;
-}
-
+} // namespace plugins
 } // namespace s2e
+
+#endif // S2E_PLUGINS_IDENTIFY_MEMORY_REGIONS_H

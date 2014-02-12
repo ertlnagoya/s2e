@@ -52,13 +52,6 @@ namespace s2e
         "Plugin for monitoring memory regions with less performance impact", "",
         );
 
-    MemoryMonitor::MemoryWatch::MemoryWatch(uint64_t start, uint64_t size,
-        int type, MemoryAccessHandlerPtr handler) :
-        type(type), start(start), size(size)
-    {
-      signal.connect(handler);
-    }
-
     void
     MemoryMonitor::initialize()
     {
@@ -99,83 +92,96 @@ namespace s2e
 //      }
     }
 
-    klee::ref<klee::Expr>
+    void
     MemoryMonitor::slotMemoryAccess(S2EExecutionState *state,
         klee::ref<klee::Expr> virtaddr /* virtualAddress */,
         klee::ref<klee::Expr> hostaddr /* hostAddress */,
-        klee::ref<klee::Expr> value /* value */, bool isWrite, bool isIO)
+        klee::ref<klee::Expr> value /* value */, bool isWrite, bool isIO, bool isCode)
     {
-      if (!isa<klee::ConstantExpr>(virtaddr))
-      {
-        s2e()->getWarningsStream()
-            << "[MemoryMonitor]: Address is not constant ("
-            << virtaddr->getKind() << ")" << '\n';
-        return value;
-      }
-      uint64_t addr = cast<klee::ConstantExpr>(virtaddr)->getZExtValue();
-      uint64_t size = value->getWidth() / 8;
+    	int access_type = 0;
+		uint64_t address = 0;
 
-      int access = (isWrite ? EMemoryWrite : EMemoryRead) | 
-                   (state->getPc() == addr ? EMemoryExecute : 0) |
-                   (isIO ? EMemoryIO : EMemoryNotIO) | 
-                   (isa<klee::ConstantExpr>(value) ? EMemoryConcrete : EMemorySymbolic);
-                   
-      s2e()->getDebugStream() << "[MemoryMonitor] Memory access at " << hexval(addr) << "[" << size << "] " << (isWrite ? "write" : "read") << '\n';
-      //TODO: End of address range (addr + width) should be checked too, but for now we assume
-      //that it will be on the same page
-//      std::vector<MemoryWatch> * watches = pageDirectory[addr
-//          / MEMORY_MONITOR_GRANULARITY];
-      for (std::map<std::pair<uint64_t, uint64_t>, MemoryWatch>::iterator itr = this->watches.find(std::make_pair(addr, addr));
-           itr != this->watches.end(); 
-           itr++)
-      {
-          if ((access & itr->second.type) == access)
-          {
-              if (m_verbose > 0)
-                s2e()->getDebugStream()
-                    << "[MemoryMonitor]: Found watch (start=" 
-                    << hexval(itr->second.start) << ",sizeq=" << hexval(itr->second.size)
-                    << ",type=" << hexval(itr->second.type)
-                    << ") when address " << hexval(addr) << "["
-                    << size << "] access type 0x" 
-                    << hexval(access) << " was hit" << '\n';
+		//TODO: Currently there is no way to find out if this is a code access
+		if (isWrite)
+			access_type |= ACCESS_TYPE_WRITE;
+		else if (isCode)
+			access_type |= ACCESS_TYPE_EXECUTE;
+		else
+			access_type |= ACCESS_TYPE_READ;
 
-              itr->second.signal.emit(state, addr, value, access);
-          }
-      }
-      
-      return value;
+		if (isIO)
+			access_type |= ACCESS_TYPE_IO;
+		else
+			access_type |= ACCESS_TYPE_NON_IO;
 
+		if (isa<klee::ConstantExpr>(virtaddr))
+		{
+			address = cast<klee::ConstantExpr>(virtaddr)->getZExtValue();
+			access_type |= ACCESS_TYPE_CONCRETE_ADDRESS;
+		}
+		else
+			access_type |= ACCESS_TYPE_SYMBOLIC_ADDRESS;
+
+		switch (value->getWidth())
+		{
+		case 8:
+			access_type |= ACCESS_TYPE_SIZE_1; break;
+		case 16:
+			access_type |= ACCESS_TYPE_SIZE_2; break;
+		case 32:
+			access_type |= ACCESS_TYPE_SIZE_4; break;
+		case 64:
+			access_type |= ACCESS_TYPE_SIZE_8; break;
+		case 128:
+			access_type |= ACCESS_TYPE_SIZE_16; break;
+		default:
+			assert(false && "Unknown memory access size");
+		}
+
+		if (this->m_verbose)
+		{
+			s2e()->getDebugStream()
+					<< "[MemoryInterceptor] slotMemoryRead called with address = " << hexval(address)
+					<< ((access_type & ACCESS_TYPE_CONCRETE_ADDRESS) ? " [concrete]" : " [symbolic]")
+					<< ", access_type = " << hexval(access_type)
+					<< ", size = " << (value->getWidth() / 8)
+					<< ", is_io = " << isIO
+					<< ", is_code = " << isCode
+					<< '\n';
+		}
+
+		for (std::list< MemoryAccessListener* >::iterator listener_itr = this->m_listeners.begin();
+			 listener_itr != this->m_listeners.end();
+			 listener_itr++)
+		{
+			if (
+					//If access type matches desired mask and either address is symbolic or matches the given range
+					((*listener_itr)->getAccessMask() & access_type) == access_type &&
+					(
+						(access_type & ACCESS_TYPE_SYMBOLIC_ADDRESS) ||
+						((*listener_itr)->getAddress() <= address &&
+						 (*listener_itr)->getAddress() + (*listener_itr)->getSize() > address)
+					)
+				)
+			{
+				//TODO: Pass isCode flag
+				(*listener_itr)->access(state, virtaddr, hostaddr, value, isWrite, isIO, false);
+			}
+		}
     }
 
     void
-    MemoryMonitor::addWatch(uint64_t start, uint64_t size,
-        int type, MemoryAccessHandlerPtr handler)
+    MemoryMonitor::addListener(MemoryAccessListener* listener)
     {
-      assert(size <= 8);
       
-      this->watches.insert(std::make_pair(make_range(start, start + size), MemoryWatch(start, size, type, handler))); 
+
+      this->m_listeners.push_back(listener);
     }
 
     void
-    MemoryMonitor::removeWatch(uint64_t start, uint64_t size)
+    MemoryMonitor::removeListener(MemoryAccessListener* listener)
     {
-        assert(size <= 8);
-      
-        for (std::map<std::pair<uint64_t, uint64_t>, MemoryWatch>::iterator itr = this->watches.find(std::make_pair(start, start));
-            itr != this->watches.end(); 
-            itr++)
-        {
-            if (itr->second.start == start && itr->second.size == size)
-            {
-                this->watches.erase(itr);
-                return;
-            }
-        }
-        
-        s2e()->getWarningsStream()
-              << "[MemoryMonitor]: No memory watch on address " 
-              << hexval(start) << " altough one should be removed" << '\n';
+    	this->m_listeners.remove(listener);
     }
 
   } // namespace plugins

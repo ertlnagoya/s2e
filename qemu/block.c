@@ -35,6 +35,12 @@
 int g_s2e_linked __attribute__((weak));
 void s2e_bdrv_fail(void) __attribute__((weak));
 
+//HACK: [J] for missing symbol
+__attribute__((__weak__)) void s2e_bdrv_fail(void)
+{
+	printf("ERROR: s2e_bdrv_fail called at %s:%d\n", __FILE__, __LINE__);
+}
+
 #ifdef CONFIG_BSD
 #include <sys/types.h>
 #include <sys/stat.h>
