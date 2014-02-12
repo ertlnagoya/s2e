@@ -206,6 +206,7 @@ public:
     /***********************/
     /* Runtime information */
     S2EExecutor* getExecutor() { return m_s2eExecutor; }
+    TCGLLVMContext *getTcgLLVMContext() {return m_tcgLLVMContext;}
 
     void registerPlugin(const PluginInfo* info) {m_pluginsFactory->registerPlugin(info);}
 
