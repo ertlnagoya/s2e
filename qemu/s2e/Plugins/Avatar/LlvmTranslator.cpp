@@ -59,6 +59,11 @@ llvm::Function *LlvmTranslator::filter_llvm_func(llvm::Function *func)
 				Function *called_func = ci->getCalledFunction();
 				s << "llvm_call: ";
 				s << *ci << "->" << *called_func;
+			} else if (StoreInst *si = dyn_cast<StoreInst>(&*ins)) {
+				Value *ptr = si->getPointerOperand();
+				llvm::Type *t = ptr->getType();
+				s << "llvm_store: ";
+				s << *si << " ptr " << *ptr << " type " << *(ptr->getType()) << " isptr " << t->isPointerTy();
 			} else {
 				s << "llvm_ins: " << *ins;
 			}
