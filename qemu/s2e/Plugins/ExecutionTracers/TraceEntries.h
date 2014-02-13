@@ -302,6 +302,7 @@ struct ExecutionTraceTestCase {
 #define EXECTRACE_MEM_SYMBADDR 8
 #define EXECTRACE_MEM_HASHOSTADDR 16
 #define EXECTRACE_MEM_SYMBHOSTADDR 32
+#define EXECTRACE_MEM_CODE 64
 struct ExecutionTraceMemory
 {
     uint64_t pc;

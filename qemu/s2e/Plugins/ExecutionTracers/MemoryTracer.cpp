@@ -111,7 +111,7 @@ void MemoryTracer::traceDataMemoryAccess(S2EExecutionState *state,
                                klee::ref<klee::Expr> &address,
                                klee::ref<klee::Expr> &hostAddress,
                                klee::ref<klee::Expr> &value,
-                               bool isWrite, bool isIO)
+                               bool isWrite, bool isIO, bool isCode)
 {
     if (m_catchAbove || m_catchBelow) {
         if (m_catchAbove && (m_catchAbove >= state->getPc())) {
@@ -165,6 +165,10 @@ void MemoryTracer::traceDataMemoryAccess(S2EExecutionState *state,
        e.flags |= EXECTRACE_MEM_SYMBHOSTADDR;
     }
 
+	if (isCode) {
+		e.flags |= EXECTRACE_MEM_CODE;
+	}
+
     unsigned strucSize = sizeof(e);
     if (!(e.flags & EXECTRACE_MEM_HASHOSTADDR)) {
        strucSize -= sizeof(e.hostAddress);
@@ -186,7 +190,7 @@ void MemoryTracer::onDataMemoryAccess(S2EExecutionState *state,
         return;
     }
 
-    traceDataMemoryAccess(state, address, hostAddress, value, isWrite, isIO);
+    traceDataMemoryAccess(state, address, hostAddress, value, isWrite, isIO, isCode);
 }
 
 void MemoryTracer::onModuleTransition(S2EExecutionState *state,
