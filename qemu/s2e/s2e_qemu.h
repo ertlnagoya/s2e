@@ -357,6 +357,8 @@ void tcg_llvm_make_symbolic(void *addr, unsigned nbytes, const char *name);
 void tcg_llvm_get_value(void *addr, unsigned nbytes, bool addConstraint);
 //#endif
 
+void s2e_shutdown_request(int signal, unsigned pid);
+
 
 /* Register target-specific helpers with LLVM */
 void helper_register_symbols(void);

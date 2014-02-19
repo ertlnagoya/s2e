@@ -69,11 +69,15 @@ public:
                                        bool isWrite, bool isIO, bool isCode);
     void slotStateKill(S2EExecutionState* state);
 
+    void slotQemuShutdownRequest(int signal, unsigned pid);
+
 private:
     uint64_t getPageAddress(uint64_t address);
     bool isShadowMemoryIdentical(uint64_t address, unsigned size, uint64_t value);
     void shadowMemoryWrite(uint64_t address, unsigned size, uint64_t value);
     bool isShadowMemoryInitialized(uint64_t address, unsigned size);
+    void dumpStats();
+
     bool m_traceBlockTranslation;
     bool m_traceBlockExecution;
     bool m_traceMemoryAccesses;

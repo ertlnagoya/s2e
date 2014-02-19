@@ -77,6 +77,10 @@ void IdentifyMemoryRegions::initialize()
 
     s2e()->getCorePlugin()->onStateKill.connect(
     		sigc::mem_fun(*this, &IdentifyMemoryRegions::slotStateKill));
+
+    s2e()->getCorePlugin()->onQemuShutdownRequest.connect(
+    		sigc::mem_fun(*this, &IdentifyMemoryRegions::slotQemuShutdownRequest));
+
 }
 
 void IdentifyMemoryRegions::slotTranslateBlockEnd(ExecutionSignal *signal,
@@ -240,89 +244,103 @@ static MemoryLabel getLabel(AccessCount& accessCount)
 	return label;
 }
 
+void IdentifyMemoryRegions::dumpStats()
+{
+	uint64_t startAddress = 0;
+	uint64_t lastAddress = 0;
+	MemoryLabel label = LABEL_NONE;
+
+	s2e()->getWarningsStream() << "[IdentifyMemoryRegions] dumpStats called" << '\n';
+
+	//Label regions as code, ro-data, data, stack, io
+	std::list< std::pair< std::pair<uint64_t, uint64_t>, MemoryLabel > > labelledRegions;
+	for (std::map<uint64_t, AccessCount>::iterator itr = m_accesses.begin();
+		 itr != m_accesses.end();
+		 itr++)
+	{
+		MemoryLabel curLabel = getLabel(itr->second);
+
+		if (itr->first == lastAddress + m_pageSize && curLabel == label && label != LABEL_NONE)
+		{
+			lastAddress = itr->first;
+		}
+		else
+		{
+			if (label != LABEL_NONE)
+			{
+				labelledRegions.push_back(std::make_pair(std::make_pair(startAddress, lastAddress + m_pageSize), label));
+			}
+
+			startAddress = itr->first;
+			lastAddress = itr->first;
+			label = curLabel;
+		}
+	}
+
+	if (label != LABEL_NONE)
+	{
+		labelledRegions.push_back(std::make_pair(std::make_pair(startAddress, lastAddress + m_pageSize), label));
+	}
+	std::string filename = s2e()->getOutputFilename("memory_regions.csv");
+	std::ofstream fout(filename.c_str());
+
+	for (std::list< std::pair< std::pair< uint64_t, uint64_t >, MemoryLabel > >::iterator itr = labelledRegions.begin();
+		 itr != labelledRegions.end();
+		 itr++)
+	{
+		fout << "0x";
+		fout << std::setfill('0') << std::setw(8) << std::hex << itr->first.first;
+		fout << ", 0x";
+		fout << std::setfill('0') << std::setw(8) << std::hex << (itr->first.second - itr->first.first);
+		fout << ", ";
+		switch(itr->second)
+		{
+		case LABEL_UNDECIDED:
+			fout << "undecided";
+			break;
+		case LABEL_STACK:
+			fout << "stack";
+			break;
+		case LABEL_IO:
+			fout << "io";
+			break;
+		case LABEL_CODE:
+			fout << "code";
+			break;
+		case LABEL_CODE_RODATA:
+			fout << "code+rodata";
+			break;
+		case LABEL_RODATA:
+			fout << "rodata";
+			break;
+		case LABEL_DATA:
+			fout << "data";
+			break;
+		case LABEL_NONE:
+			fout << "error";
+			break;
+		}
+
+		fout << "\n";
+	}
+
+	fout.close();
+
+
+}
+
 
 void IdentifyMemoryRegions::slotStateKill(S2EExecutionState* state)
 {
 	if (s2e()->getExecutor()->getStatesCount() <= 1)
 	{
-		uint64_t startAddress = 0;
-		uint64_t lastAddress = 0;
-		MemoryLabel label = LABEL_NONE;
-		//Label regions as code, ro-data, data, stack, io
-		std::list< std::pair< std::pair<uint64_t, uint64_t>, MemoryLabel > > labelledRegions;
-		for (std::map<uint64_t, AccessCount>::iterator itr = m_accesses.begin();
-		     itr != m_accesses.end();
-		     itr++)
-		{
-			MemoryLabel curLabel = getLabel(itr->second);
-
-			if (itr->first == lastAddress + m_pageSize && curLabel == label && label != LABEL_NONE)
-			{
-				lastAddress = itr->first;
-			}
-			else
-			{
-				if (label != LABEL_NONE)
-				{
-					labelledRegions.push_back(std::make_pair(std::make_pair(startAddress, lastAddress + m_pageSize), label));
-				}
-
-				startAddress = itr->first;
-				lastAddress = itr->first;
-				label = curLabel;
-			}
-		}
-
-		if (label != LABEL_NONE)
-		{
-			labelledRegions.push_back(std::make_pair(std::make_pair(startAddress, lastAddress + m_pageSize), label));
-		}
-		std::string filename = s2e()->getOutputFilename("memory_regions.csv");
-		std::ofstream fout(filename.c_str());
-
-		for (std::list< std::pair< std::pair< uint64_t, uint64_t >, MemoryLabel > >::iterator itr = labelledRegions.begin();
-			 itr != labelledRegions.end();
-			 itr++)
-		{
-			fout << "0x";
-			fout << std::setfill('0') << std::setw(8) << std::hex << itr->first.first;
-			fout << ", 0x";
-			fout << std::setfill('0') << std::setw(8) << std::hex << (itr->first.second - itr->first.first);
-			fout << ", ";
-			switch(itr->second)
-			{
-			case LABEL_UNDECIDED:
-				fout << "undecided";
-				break;
-			case LABEL_STACK:
-				fout << "stack";
-				break;
-			case LABEL_IO:
-				fout << "io";
-				break;
-			case LABEL_CODE:
-				fout << "code";
-				break;
-			case LABEL_CODE_RODATA:
-				fout << "code+rodata";
-				break;
-			case LABEL_RODATA:
-				fout << "rodata";
-				break;
-			case LABEL_DATA:
-				fout << "data";
-				break;
-			case LABEL_NONE:
-				fout << "error";
-				break;
-			}
-
-			fout << "\n";
-		}
-
-		fout.close();
+		dumpStats();
 	}
+}
 
+void IdentifyMemoryRegions::slotQemuShutdownRequest(int signal, unsigned pid)
+{
+	dumpStats();
 }
 
 } // namespace plugins

@@ -339,6 +339,9 @@ public:
                 QDict * /* result */>
           onMonitorEvent;
 
+    sigc::signal<void, int /* signal */, unsigned /* pid */>
+    	onQemuShutdownRequest;
+
 
 };
 
