@@ -1526,7 +1526,9 @@ void qemu_system_killed(int signal, pid_t pid)
     shutdown_signal = signal;
     shutdown_pid = pid;
     no_shutdown = 0;
+#ifdef CONFIG_S2E
     s2e_shutdown_request(signal, pid);
+#endif
     qemu_system_shutdown_request();
 }
 
