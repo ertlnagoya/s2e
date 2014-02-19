@@ -71,6 +71,7 @@ public:
     void parse(std::string& token);
 	bool wasHit() {return m_hit;}
 	void resetHit() {m_hit = false;}
+	bool m_writeBack;
     
 private:
     static void * receiveThread(void *);

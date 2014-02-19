@@ -70,10 +70,13 @@ void RemoteMemory::initialize()
     
     m_verbose =
         cfg->getBool(getConfigKey() + ".verbose", false, &ok);
+	bool writeBack =
+		cfg->getBool(getConfigKey() + ".writeBack", false, &ok);
       
     std::string serverSocketAddress = cfg->getString(getConfigKey() + ".listen", ":5555", &ok);
     
     m_remoteInterface = std::tr1::shared_ptr<RemoteMemoryInterface>(new RemoteMemoryInterface(s2e(), serverSocketAddress, m_verbose)); 
+	m_remoteInterface->m_writeBack = writeBack;
     MemoryInterceptor* memoryInterceptor = static_cast<MemoryInterceptor *>(s2e()->getPlugin("MemoryInterceptor"));
     assert(memoryInterceptor);
     
@@ -317,7 +320,20 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
 
 	//TODO: There could be multiple responses, but we assume the first is the right
      json::String& strValue = (*response)["value"];
-     return hexBufToInt(strValue);
+     uint64_t ret_val = hexBufToInt(strValue);
+
+	if (m_writeBack) {
+#ifdef TARGET_WORDS_BIGENDIAN
+		assert(0 && "Cannot write back memory. Target is big endian.");
+#endif
+		if (m_verbose)
+			m_s2e->getDebugStream() << "[RemoteMemory] write back value 0x" <<
+				hexval(ret_val) << " to address 0x" << hexval(address) << '\n';
+		assert(state);
+		/* XXX: see above! */
+		state->writeMemoryConcrete(address, &ret_val, size, S2EExecutionState::PhysicalAddress);
+	}
+	return ret_val;
 }
 
 bool RemoteMemoryInterface::waitForAnswer(S2EExecutionState *state,
