@@ -286,6 +286,8 @@ public:
   ~S2ELUAExecutionState();
   int writeRegister(lua_State *L);
   int writeRegisterSymb(lua_State *L);
+  int setFlagSymb(lua_State *L);
+  int setFlag(lua_State *L);
   int readRegister(lua_State *L);
   int readParameter(lua_State *L);
   int writeParameter(lua_State *L);
@@ -295,6 +297,8 @@ public:
   int writeMemory(lua_State *L);
   int isSpeculative(lua_State *L);
   int getID(lua_State *L);
+
+  int get_cpu_offset_by_flag_name(const char flag);
 };
 
 

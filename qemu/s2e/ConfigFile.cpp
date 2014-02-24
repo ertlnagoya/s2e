@@ -401,6 +401,8 @@ const char S2ELUAExecutionState::className[] = "S2ELUAExecutionState";
 Lunar<S2ELUAExecutionState>::RegType S2ELUAExecutionState::methods[] = {
   LUNAR_DECLARE_METHOD(S2ELUAExecutionState, writeRegister),
   LUNAR_DECLARE_METHOD(S2ELUAExecutionState, writeRegisterSymb),
+  LUNAR_DECLARE_METHOD(S2ELUAExecutionState, setFlagSymb),
+  LUNAR_DECLARE_METHOD(S2ELUAExecutionState, setFlag),
   LUNAR_DECLARE_METHOD(S2ELUAExecutionState, readRegister),
   LUNAR_DECLARE_METHOD(S2ELUAExecutionState, readParameter),
   LUNAR_DECLARE_METHOD(S2ELUAExecutionState, writeParameter),
@@ -864,6 +866,92 @@ int S2ELUAExecutionState::writeRegister(lua_State *L)
     }
 
     return 0;                   /* number of results */
+}
+
+int S2ELUAExecutionState::get_cpu_offset_by_flag_name(const char flag)
+{
+#ifdef TARGET_ARM
+	switch (flag) {
+	case 'N': return CPU_OFFSET(NF);
+	case 'Z': return CPU_OFFSET(ZF);
+	case 'C': return CPU_OFFSET(CF);
+	case 'V': return CPU_OFFSET(VF);
+	case 'Q': return CPU_OFFSET(QF);
+	case 'G': return CPU_OFFSET(GE);
+	default: return -1;
+	}
+#endif
+	return -1;
+}
+
+int S2ELUAExecutionState::setFlag(lua_State *L)
+{
+	std::string flag_name = luaL_checkstring(L, 1);
+	uint32_t flag_value = luaL_checkint(L, 2);
+	int flag_cpu_offset = get_cpu_offset_by_flag_name(flag_name.c_str()[0]);
+
+	g_s2e->getDebugStream() << "S2ELUAExecutionState: set flag value: "
+		<< flag_name << '\n';
+
+	if (flag_cpu_offset == -1) {
+		g_s2e->getDebugStream() << "S2ELUAExecutionState: failed to get cpu offset for flag : "
+			<< flag_name << '\n';
+		lua_pushboolean(L, false);
+		return 1;
+	}
+
+	uint32_t val = ((flag_value & 0x1) << 31) & 0xffffffff;
+	m_state->writeCpuRegisterConcrete(flag_cpu_offset, &val, 4);
+	lua_pushboolean(L, true);
+	return 1;
+}
+
+int S2ELUAExecutionState::setFlagSymb(lua_State *L)
+{
+	std::string flag_name = luaL_checkstring(L, 1);
+	int flag_cpu_offset = get_cpu_offset_by_flag_name(flag_name.c_str()[0]);
+	uint32_t flag_value;
+	/* return true if flag was marked symbolic,
+	 * false if flag was already symbolic or if flag didn't existed
+	 */
+
+	g_s2e->getDebugStream() << "S2ELUAExecutionState: make flag symbolic: "
+		<< flag_name << '\n';
+
+	if (flag_cpu_offset == -1) {
+		g_s2e->getDebugStream() << "S2ELUAExecutionState: failed to get cpu offset for flag : "
+			<< flag_name << '\n';
+		lua_pushboolean(L, false);
+		return 1;
+	}
+
+	if (m_state->readCpuRegisterConcrete(flag_cpu_offset,
+				&flag_value, sizeof (flag_value))) {
+		g_s2e->getDebugStream() << "S2ELUAExecutionState: flag is concrete: "
+			<< flag_name << '\n';
+	} else {
+		g_s2e->getDebugStream() << "S2ELUAExecutionState: flag is already symbolic: "
+			<< flag_name << '\n';
+		lua_pushboolean(L, false);
+		return 1;
+	}
+
+	/* XXX: we should mark just the first bit symbolic from the flag.
+	 * this is not possible because writeCpuRegister would have to take
+	 * an one byte buffer as a parameter. And then we have to add 3 (or
+	 * not) depending on the endianness.
+	 */
+	std::vector<unsigned char> buf;
+	buf.push_back(flag_value & (0xFF << 0));
+	buf.push_back(flag_value & (0xFF << 8));
+	buf.push_back(flag_value & (0xFF << 16));
+	buf.push_back(flag_value & (0xFF << 24));
+
+	klee::ref<klee::Expr> val = m_state->createConcolicValue(flag_name, 32, buf);
+	m_state->writeCpuRegister(flag_cpu_offset, val);
+
+	lua_pushboolean(L, true);
+	return 1;
 }
 
 int S2ELUAExecutionState::writeRegisterSymb(lua_State *L)
