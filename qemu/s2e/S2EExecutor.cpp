@@ -479,7 +479,7 @@ void S2EExecutor::handlerHijackMemoryAccess(Executor* executor,
     if (is_write && !g_s2e->getCorePlugin()->onHijackMemoryWrite.empty())
     {
         std::vector< klee::ref< klee::Expr > > valueBytes;
-        s2eState->kleeReadMemory(args[2], klee::Expr::Int64, &valueBytes, false, false, false);
+        s2eState->kleeReadMemory(args[2], klee::Expr::Int64, &valueBytes, false, true, false);
         //TODO: [J] Need to care about endianness here?
         klee::ref< klee::Expr > value = klee::ConcatExpr::create8(
                 valueBytes[7],
