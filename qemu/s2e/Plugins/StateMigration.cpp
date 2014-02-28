@@ -35,6 +35,7 @@ bool StateMigration::addFunc(const std::string &entry)
 	new_func.pre_addr = (uint64_t) s2e()->getConfig()->getInt(sk + ".pre_addr");
 	new_func.pre_len = (uint32_t) s2e()->getConfig()->getInt(sk + ".pre_len");
 	new_func.migrate_stack = s2e()->getConfig()->getBool(sk + ".migrate_stack");
+	new_func.migrate_code = s2e()->getConfig()->getBool(sk + ".migrate_code", true);
 	if (new_func.migrate_stack)
 		new_func.stack_size = (uint32_t) s2e()->getConfig()->getInt(sk + ".stack_size", 256);
 
@@ -439,11 +440,17 @@ void StateMigration::doMigration(S2EExecutionState *state,
 	}
 
 	/* migrate code */
-	printf("[StateMigration]: migrate some code\n");
 	assert(func.start_pc < func.end_pc);
 	/* code_len including last instruction */
 	uint64_t code_len = func.end_pc - func.start_pc + 4;
-	copyToDevice(state, func.start_pc, code_len);
+	if (func.migrate_code) {
+		/* we might want to skip code migration
+		 * something is broken and we're reading 0's if the code is not
+		 * mapped into the host emulator
+		 */
+		printf("[StateMigration]: migrate some code\n");
+		copyToDevice(state, func.start_pc, code_len);
+	}
 	/* XXX: backup instruction, we don't really need this */
 	uint32_t old_isn = putBreakPoint(state, func.end_pc);
 
