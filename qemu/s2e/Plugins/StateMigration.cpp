@@ -51,6 +51,8 @@ void StateMigration::initialize()
 
 	m_verbose = s2e()->getConfig()->getBool(
 			getConfigKey() + ".verbose");
+	m_remoteTargetHasCRC = s2e()->getConfig()->getBool(
+			getConfigKey() + ".remoteTargetHasCRC", false);
 	m_remoteMemory = static_cast<RemoteMemory*>(s2e()->getPlugin("RemoteMemory"));
 
 	s2e()->getCorePlugin()->onTranslateBlockStart.connect(
@@ -78,6 +80,8 @@ bool StateMigration::areTheBuffersInSync(S2EExecutionState *state,
 		uint64_t addr, uint32_t len)
 {
 	if (len <= 4)
+		return false;
+	if (m_remoteTargetHasCRC == false)
 		return false;
 
 	uint8_t *data = (uint8_t *)malloc(len);
@@ -290,6 +294,7 @@ uint32_t StateMigration::getRemoteChecksum(S2EExecutionState* state,
 	json::Object params;
 	std::tr1::shared_ptr<json::Object> response;
 
+	assert(m_remoteTargetHasCRC == true);
 	printf("[StateMigration]: send checksum request\n");
 	request.Insert(json::Object::Member("cmd", json::String("get_checksum")));
 	params.Insert(json::Object::Member("address", json::String(intToHex(address))));

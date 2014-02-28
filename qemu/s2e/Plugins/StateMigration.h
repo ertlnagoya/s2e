@@ -26,6 +26,7 @@ class StateMigration : public Plugin
 
 	private:
 		bool m_verbose;
+		bool m_remoteTargetHasCRC;
 		RemoteMemory *m_remoteMemory;
 		std::tr1::shared_ptr<RemoteMemoryInterface> m_remoteMemoryInterface;
 		bool copyToDevice(S2EExecutionState* state, uint64_t addr, uint32_t len);
