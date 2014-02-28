@@ -90,7 +90,7 @@ bool StateMigration::areTheBuffersInSync(S2EExecutionState *state,
 		return false;
 
 	uint8_t *data = (uint8_t *)malloc(len);
-	state->readMemoryConcrete(addr, data, len);
+	state->readMemoryConcrete(addr, data, len, S2EExecutionState::PhysicalAddress);
 	uint8_t local_crc = CRC::crc_calc_buf(data, len);
 	uint8_t remote_crc = getRemoteChecksum(state, addr, len);
 
@@ -131,7 +131,7 @@ bool StateMigration::copyToDevice(S2EExecutionState* state,
 		printf("[StateMigration]: copy_to_device: DO copy!\n");
 
 	uint8_t *data = (uint8_t *)malloc(len);
-	bool ret = state->readMemoryConcrete(addr, data, len);
+	bool ret = state->readMemoryConcrete(addr, data, len, S2EExecutionState::PhysicalAddress);
 	for (int i = 0; i < len; i += 4) {
 		uint64_t x = 0;
 #ifdef TARGET_WORDS_BIGENDIAN
@@ -187,7 +187,7 @@ bool StateMigration::copyFromDevice(S2EExecutionState* state,
 #endif
 	}
 
-	ret = state->writeMemoryConcrete(addr, data, len);
+	ret = state->writeMemoryConcrete(addr, data, len, S2EExecutionState::PhysicalAddress);
 	free(data);
 
 	return ret;
@@ -315,7 +315,7 @@ uint32_t StateMigration::getEmulatorChecksum(S2EExecutionState* state,
 		uint32_t len)
 {
 	uint8_t *data = (uint8_t *)malloc(len);
-	bool ret = state->readMemoryConcrete(addr, data, len);
+	bool ret = state->readMemoryConcrete(addr, data, len, S2EExecutionState::PhysicalAddress);
 	uint8_t crc;
 	if (!ret) {
 		printf("[StateMigration]: failed to get crc\n");
