@@ -463,7 +463,7 @@ void StateMigration::doMigration(S2EExecutionState *state,
 	printf("[StateMigration]: resuming\n");
 	resumeExecution(state);
 	/* XXX: remove this fake read */
-	m_remoteMemory->getInterface()->readMemory(state, 0x18000, 4);
+	m_remoteMemory->getInterface()->readMemory(state, regs[15], 4);
 
 	printf("[StateMigration]: transfering state from device\n");
 	transferStateFromDevice(state, regs);
