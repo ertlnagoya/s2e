@@ -82,6 +82,8 @@ void StateMigration::slotTranslateBlockStart(ExecutionSignal *signal,
 bool StateMigration::areTheBuffersInSync(S2EExecutionState *state,
 		uint64_t addr, uint32_t len)
 {
+	if (len == 0)
+		return true;
 	if (len <= 4)
 		return false;
 	if (m_remoteTargetHasCRC == false)
