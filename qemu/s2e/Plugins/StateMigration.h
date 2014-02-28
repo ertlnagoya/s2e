@@ -46,6 +46,10 @@ class StateMigration : public Plugin
 		S2E *m_s2e;
 		uint32_t writeMemoryBe_32(S2EExecutionState *state,
 				uint64_t addr, const uint32_t val);
+		uint32_t writeMemory32(S2EExecutionState *state,
+				uint64_t addr, const uint32_t val);
+		uint32_t writeMemoryLe_32(S2EExecutionState *state,
+				uint64_t addr, const uint32_t val);
 		/* return true if the buffers are the same */
 		bool areTheBuffersInSync(S2EExecutionState *state,
 				uint64_t addr, uint32_t len);

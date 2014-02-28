@@ -129,10 +129,17 @@ bool StateMigration::copyToDevice(S2EExecutionState* state,
 	bool ret = state->readMemoryConcrete(addr, data, len);
 	for (int i = 0; i < len; i += 4) {
 		uint64_t x = 0;
-		x = data[i];
+#ifdef TARGET_WORDS_BIGENDIAN
+		x = (x << 8) | data[i+0];
 		x = (x << 8) | data[i+1];
 		x = (x << 8) | data[i+2];
 		x = (x << 8) | data[i+3];
+#else
+		x = (x << 8) | data[i+3];
+		x = (x << 8) | data[i+2];
+		x = (x << 8) | data[i+1];
+		x = (x << 8) | data[i+0];
+#endif
 		m_remoteMemory->getInterface()->writeMemory(state, addr+i, 4, x);
 	}
 	/* issue a dummy read for flushing the writes */
@@ -162,10 +169,17 @@ bool StateMigration::copyFromDevice(S2EExecutionState* state,
 	for (int i = 0; i < len; i += 4) {
 		uint64_t x;
 		x = m_remoteMemory->getInterface()->readMemory(state, addr+i, 4);
+#ifdef TARGET_WORDS_BIGENDIAN
 		data[i+3] = (uint8_t)((x >> 0 ) & 0xff);
 		data[i+2] = (uint8_t)((x >> 8 ) & 0xff);
 		data[i+1] = (uint8_t)((x >> 16) & 0xff);
 		data[i+0] = (uint8_t)((x >> 24) & 0xff);
+#else
+		data[i+0] = (uint8_t)((x >> 0 ) & 0xff);
+		data[i+1] = (uint8_t)((x >> 8 ) & 0xff);
+		data[i+2] = (uint8_t)((x >> 16) & 0xff);
+		data[i+3] = (uint8_t)((x >> 24) & 0xff);
+#endif
 	}
 
 	ret = state->writeMemoryConcrete(addr, data, len);
@@ -174,12 +188,34 @@ bool StateMigration::copyFromDevice(S2EExecutionState* state,
 	return ret;
 }
 
+
+uint32_t StateMigration::writeMemory32(S2EExecutionState *state,
+		uint64_t addr, const uint32_t val)
+{
+#ifdef TARGET_WORDS_BIGENDIAN
+	return writeMemoryBe_32(state, addr, val);
+#else
+	return writeMemoryLe_32(state, addr, val);
+#endif
+}
+
+uint32_t StateMigration::writeMemoryLe_32(S2EExecutionState *state,
+		uint64_t addr, const uint32_t val)
+{
+	uint32_t old_data;
+	old_data = m_remoteMemory->getInterface()->readMemory(state, addr, 4);
+	for (int i = 3; i >= 0; --i) {
+		m_remoteMemory->getInterface()->writeMemory(state, addr+i, 1, (uint64_t)(0xff & (val >> (8*i))));
+	}
+	m_remoteMemory->getInterface()->readMemory(state, addr, 4);
+	return old_data;
+}
+
 uint32_t StateMigration::writeMemoryBe_32(S2EExecutionState *state, uint64_t addr, const uint32_t val)
 {
 	uint32_t old_data;
 	old_data = m_remoteMemory->getInterface()->readMemory(state, addr, 4);
 	for (int i = 3; i >= 0; --i) {
-		/* XXX: write big endian */
 		m_remoteMemory->getInterface()->writeMemory(state, addr+(3-i), 1, (uint64_t)(0xff & (val >> (8*i))));
 	}
 	m_remoteMemory->getInterface()->readMemory(state, addr, 4);
@@ -190,7 +226,7 @@ uint32_t StateMigration::putBreakPoint(S2EExecutionState *state, uint64_t addr)
 {
 	const uint32_t brk_isn = 0xe1200472;
 	uint32_t ret;
-	ret = writeMemoryBe_32(state, addr, brk_isn);
+	ret = this->writeMemory32(state, addr, brk_isn);
 	printf("[StateMigration]: done inserting the breakpoint at 0x%08lx\n",
 			addr);
 	return ret;
@@ -425,7 +461,7 @@ void StateMigration::doMigration(S2EExecutionState *state,
 		copyFromDevice(state, new_sp, STACK_SIZE);
 	}
 	/* restore instruction */
-	writeMemoryBe_32(state, func.end_pc, old_isn);
+	this->writeMemory32(state, func.end_pc, old_isn);
 	/* XXX: remove */
 	getRegsFromState(state, regs);
 	/* migrate back the stack */
