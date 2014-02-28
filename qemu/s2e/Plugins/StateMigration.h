@@ -66,6 +66,7 @@ class StateMigration : public Plugin
 			uint32_t post_len;
 
 			bool migrate_stack;
+			uint32_t stack_size;
 		};
 		void doMigration(S2EExecutionState *state, struct target_function func);
 		std::vector<struct target_function> m_functions;

@@ -35,6 +35,8 @@ bool StateMigration::addFunc(const std::string &entry)
 	new_func.pre_addr = (uint64_t) s2e()->getConfig()->getInt(sk + ".pre_addr");
 	new_func.pre_len = (uint32_t) s2e()->getConfig()->getInt(sk + ".pre_len");
 	new_func.migrate_stack = s2e()->getConfig()->getBool(sk + ".migrate_stack");
+	if (new_func.migrate_stack)
+		new_func.stack_size = (uint32_t) s2e()->getConfig()->getInt(sk + ".stack_size", 256);
 
 	m_functions.push_back(new_func);
 	return true;
@@ -407,7 +409,10 @@ void StateMigration::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc
 void StateMigration::doMigration(S2EExecutionState *state,
 		struct target_function func)
 {
-#define STACK_SIZE 256
+#ifndef TARGET_ARM
+	assert(0 && "only arch arm is supported");
+#endif
+
 	/* XXX: func is copied
 	 * 1. migrate data
 	 * 2. migrate code
@@ -430,7 +435,7 @@ void StateMigration::doMigration(S2EExecutionState *state,
 		/* migrate some stack */
 		uint32_t sp = regs[13];
 		printf("[StateMigration]: migrate some stack: 0x%08x\n", sp);
-		copyToDevice(state, sp, STACK_SIZE);
+		copyToDevice(state, sp, func.stack_size);
 	}
 
 	/* migrate code */
@@ -458,7 +463,7 @@ void StateMigration::doMigration(S2EExecutionState *state,
 	if (func.migrate_stack) {
 		uint32_t new_sp = regs[13];
 		printf("[StateMigration]: migrate some stack back\n");
-		copyFromDevice(state, new_sp, STACK_SIZE);
+		copyFromDevice(state, new_sp, func.stack_size);
 	}
 	/* restore instruction */
 	this->writeMemory32(state, func.end_pc, old_isn);
