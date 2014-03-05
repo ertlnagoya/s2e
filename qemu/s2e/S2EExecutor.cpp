@@ -430,7 +430,7 @@ void S2EExecutor::handlerTraceMemoryAccess(Executor* executor,
         assert(dynamic_cast<S2EExecutionState*>(state));
         S2EExecutionState* s2eState = static_cast<S2EExecutionState*>(state);
 
-        assert(args.size() == 6);
+        assert(args.size() == 7);
 
         Expr::Width width = cast<klee::ConstantExpr>(args[3])->getZExtValue();
         bool isWrite = cast<klee::ConstantExpr>(args[4])->getZExtValue();
