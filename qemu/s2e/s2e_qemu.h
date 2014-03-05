@@ -241,6 +241,8 @@ void s2e_helper_do_interrupt(struct CPUARMState *);
 void s2e_do_interrupt(int intno, int is_int, int error_code, uint64_t next_eip, int is_hw);
 #endif
 
+void s2e_kill_current_state(void);
+
 /** This function is called when RAM is read by concretely executed
     generated code. If the memory location turns out to be symbolic,
     this function will either concretize it of switch to execution

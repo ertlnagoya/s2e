@@ -2717,6 +2717,16 @@ void s2e_flush_tlb_cache()
     g_s2e_state->flushTlbCache();
 }
 
+void s2e_kill_current_state(void)
+{
+	try {
+		g_s2e->getExecutor()->terminateStateEarly(*g_s2e_state, "killing current state ...");
+	} catch (s2e::CpuExitException&) {
+		s2e_longjmp(env->jmp_env, 1);
+	}
+}
+
+
 void s2e_flush_tb_cache()
 {
     if (g_s2e && g_s2e->getExecutor()->getStatesCount() > 1) {

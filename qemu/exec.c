@@ -4916,7 +4916,13 @@ tb_page_addr_t get_page_addr_code(CPUArchState *env1, target_ulong addr)
 #if defined(TARGET_ALPHA) || defined(TARGET_MIPS) || defined(TARGET_SPARC)
         cpu_unassigned_access(env1, addr, 0, 1, 0, 4);
 #else
+#ifdef CONFIG_S2E
+		printf("Trying to execute code outside RAM or ROM at 0x" TARGET_FMT_lx "\n", addr);
+		s2e_kill_current_state();
+#else
         cpu_abort(env1, "Trying to execute code outside RAM or ROM at 0x" TARGET_FMT_lx "\n", addr);
+#endif
+
 #endif
     }
     p = (void *)((uintptr_t)addr + env1->tlb_table[mmu_idx][page_index].addend);
