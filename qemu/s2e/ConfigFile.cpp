@@ -900,8 +900,15 @@ int S2ELUAExecutionState::setFlag(lua_State *L)
 		return 1;
 	}
 
-	uint32_t val = ((flag_value & 0x1) << 31) & 0xffffffff;
+	/* XXX: it seems that the flags are negated */
+	uint32_t val = !((flag_value & 0x1));
+	uint32_t old_val;
+
+	m_state->readCpuRegisterConcrete(flag_cpu_offset, &old_val, 4);
 	m_state->writeCpuRegisterConcrete(flag_cpu_offset, &val, 4);
+
+	g_s2e->getDebugStream() << "S2ELUAExecutionState: set flag value: "
+		<< flag_name << " from " << hexval(old_val) << " to " << hexval(val) << '\n';
 	lua_pushboolean(L, true);
 	return 1;
 }
