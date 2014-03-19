@@ -9,6 +9,7 @@
 #include <istream>
 
 #include "../ExecutionTracers/TraceEntries.h"
+#include "../MemoryInterceptor.h"
 
 namespace s2e {
 namespace plugins {
@@ -19,11 +20,13 @@ class ReplayMemoryAccesses : public Plugin
 		public:
 			ReplayMemoryAccesses(S2E* s2e): Plugin(s2e) {m_s2e = s2e;}
 			void initialize();
+			friend class MemoryInterceptorReplayHandler;
 		private:
 			S2E* m_s2e;
 			std::string m_inputFileName;
 			bool m_verbose;
 			bool m_skipCode;
+			MemoryInterceptor* m_memoryInterceptor;
 
 			std::ifstream m_inputFile;
 			bool updateNextMemoryAccess();
@@ -32,21 +35,38 @@ class ReplayMemoryAccesses : public Plugin
 			ExecutionTraceMemory *m_nextToMatch;
 			ExecutionTraceItemHeader mLastHdr;
 
-			bool slotMemoryWrite(S2EExecutionState *state,
-					klee::ref<klee::Expr> virtaddr /* virtualAddress */,
-					klee::ref<klee::Expr> hostaddr /* hostAddress */,
-					klee::ref<klee::Expr> value,
-					bool is_io);
-			klee::ref<klee::Expr> slotMemoryRead(S2EExecutionState *state,
-					klee::ref<klee::Expr> virtaddr /* virtualAddress */,
-					klee::ref<klee::Expr> hostaddr /* hostAddress */,
-					unsigned size,
-					bool is_io, bool is_code);
-
 			/* return true if the ret value is meaningful */
 			bool setValueFromNext(uint64_t address, bool isWrite,
 					unsigned size, /* size in bits */
 					uint64_t *valueRet);
+
+			/* return true if setup succeeded */
+			bool setupRangeListeners();
+	};
+
+class MemoryInterceptorReplayHandler : public MemoryAccessHandler
+	{
+		public:
+			MemoryInterceptorReplayHandler(
+					S2E* s2e,
+					uint64_t address,
+					uint64_t size,
+					int mask);
+
+			virtual klee::ref<klee::Expr> read(S2EExecutionState *state,
+					klee::ref<klee::Expr> virtaddr,
+					klee::ref<klee::Expr> hostaddr,
+					unsigned size,
+					bool isIO, bool isCode);
+			virtual bool write(S2EExecutionState *state,
+					klee::ref<klee::Expr> virtaddr,
+					klee::ref<klee::Expr> hostaddr,
+					klee::ref<klee::Expr> value,
+					bool isIO);
+		private:
+			S2E* m_s2e;
+			ReplayMemoryAccesses *m_replayMemoryAccesses;
+			virtual ~MemoryInterceptorReplayHandler() {}
 	};
 
 }

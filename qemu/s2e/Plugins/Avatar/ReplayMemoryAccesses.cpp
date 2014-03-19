@@ -19,28 +19,174 @@ namespace plugins {
 
 S2E_DEFINE_PLUGIN(ReplayMemoryAccesses,
 		"ReplayMemoryAccesses -- Replay previous recorded memory trace",
-		"ReplayMemoryAccesses");
+		"ReplayMemoryAccesses", "MemoryInterceptor");
 
 void ReplayMemoryAccesses::initialize()
 {
-	m_verbose = s2e()->getConfig()->getBool(getConfigKey()+".verbose");
-	m_skipCode = s2e()->getConfig()->getBool(getConfigKey()+".skipCode", true);
-	m_inputFileName = s2e()->getConfig()->getString(getConfigKey()+".replayTraceFileName");
+	ConfigFile *cfg = s2e()->getConfig();
 
+	m_verbose = cfg->getBool(getConfigKey()+".verbose");
+	m_skipCode = cfg->getBool(getConfigKey()+".skipCode", true);
+	m_inputFileName = cfg->getString(getConfigKey()+".replayTraceFileName");
+	m_memoryInterceptor =
+		static_cast<MemoryInterceptor *>(s2e()->getPlugin(
+					"MemoryInterceptor"));
+	assert(m_memoryInterceptor);
+
+	/* prepare input file */
 	m_inputFile.open(m_inputFileName.c_str(), std::ifstream::in | std::ifstream::binary);
-	std::cerr << m_inputFileName << '\n';
-	std::cerr << "err: " << std::strerror(errno) << '\n';
+	if (!m_inputFile.good()) {
+		std::cerr << m_inputFileName << ' ' << "err: " << std::strerror(errno) << '\n';
+	}
 	assert(m_inputFile.good());
+
+	/* allocate initial state */
 	m_nextToMatch = new ExecutionTraceMemory;
 	m_stateId = 0;
 
-	s2e()->getCorePlugin()->onHijackMemoryRead.connect(sigc::mem_fun(*this, &ReplayMemoryAccesses::slotMemoryRead));
-	s2e()->getCorePlugin()->onHijackMemoryWrite.connect(sigc::mem_fun(*this, &ReplayMemoryAccesses::slotMemoryWrite));
+	/* parse memory ranges */
+	if (!setupRangeListeners()) {
+		assert(0 && "Failed to setup range listeners");
+	}
 
 	s2e()->getDebugStream() << "[ReplayMemoryAccesses]: initialized" << '\n';
 }
 
-klee::ref<klee::Expr> ReplayMemoryAccesses::slotMemoryRead(S2EExecutionState *state,
+bool ReplayMemoryAccesses::setupRangeListeners()
+{
+	ConfigFile *cfg = s2e()->getConfig();
+	bool ok;
+
+	std::vector<std::string> plugins_keys = cfg->getListKeys(
+			getConfigKey() + ".ranges", &ok);
+	if (!ok) {
+		s2e()->getWarningsStream()
+			<< "[MemoryInterceptorReplay] Error reading subkey .intereceptors"
+			<< '\n';
+		return false;
+	}
+
+	for (std::vector<std::string>::iterator plugins_itr =
+			plugins_keys.begin(); plugins_itr != plugins_keys.end();
+			plugins_itr++)
+	{
+		std::vector<std::string> ranges_keys = cfg->getListKeys(
+				getConfigKey() + ".ranges." + *plugins_itr, &ok);
+		if (!ok) {
+			s2e()->getWarningsStream()
+				<< "[MemoryInterceptorReplay] Error reading subkey .ranges."
+				<< *plugins_itr << '\n';
+			return false;
+		}
+
+		std::string interceptor_key = getConfigKey() + ".ranges." + *plugins_itr;
+
+		if (!cfg->hasKey(interceptor_key + ".address")
+				|| !cfg->hasKey(interceptor_key + ".size")
+				|| !cfg->hasKey(interceptor_key + ".access_type"))
+		{
+			s2e()->getWarningsStream()
+				<< "[MemoryInterceptorReplay] Error: subkey .address, .size "
+				<< "or .access_type for key " << interceptor_key
+				<< " missing!" << '\n';
+			return false;
+		}
+
+		uint64_t address = cfg->getInt(
+				interceptor_key + ".address");
+		uint64_t size = cfg->getInt(interceptor_key + ".size");
+		ConfigFile::string_list access_types =
+			cfg->getStringList(interceptor_key + ".access_type",
+					ConfigFile::string_list(), &ok);
+		if (!ok) {
+			s2e()->getWarningsStream()
+				<< "[MemoryInterceptorReplay] Error reading subkey "
+				<< interceptor_key
+				<< ".access_type"
+				<< '\n';
+			return false;
+		}
+
+		int access_type = 0;
+		for (ConfigFile::string_list::const_iterator access_type_itr =
+				access_types.begin();
+				access_type_itr != access_types.end();
+				access_type_itr++)
+		{
+			if (*access_type_itr == "read")
+				access_type |= ACCESS_TYPE_READ;
+			else if (*access_type_itr == "write")
+				access_type |= ACCESS_TYPE_WRITE;
+			else if (*access_type_itr == "execute")
+				access_type |= ACCESS_TYPE_EXECUTE;
+			else if (*access_type_itr == "io")
+				access_type |= ACCESS_TYPE_IO;
+			else if (*access_type_itr == "memory")
+				access_type |= ACCESS_TYPE_NON_IO;
+			else if (*access_type_itr == "concrete_value")
+				access_type |= ACCESS_TYPE_CONCRETE_VALUE;
+			//TODO: Symbolic values not yet supported
+			//                else if (*access_type_itr == "symbolic_value")
+			//                    access_type |= ACCESS_TYPE_SYMBOLIC_VALUE;
+			else if (*access_type_itr == "concrete_address")
+				access_type |= ACCESS_TYPE_CONCRETE_ADDRESS;
+			//TODO: Symbolic values not yet supported
+			//                else if (*access_type_itr == "symbolic_address")
+			//                    access_type |= ACCESS_TYPE_SYMBOLIC_ADDRESS;
+		}
+
+		//Add some sane defaults while symbolic values are disabled
+		//User can select concrete, concrete+symbolic, symbolic for address and value, default is concrete
+		if (!(access_type & ACCESS_TYPE_SYMBOLIC_VALUE))
+			access_type |= ACCESS_TYPE_CONCRETE_VALUE;
+		if (!(access_type & ACCESS_TYPE_SYMBOLIC_ADDRESS))
+			access_type |= ACCESS_TYPE_CONCRETE_ADDRESS;
+
+		//If none of read, write, execute is specified, all are assumed
+		if (!(access_type
+					& (ACCESS_TYPE_READ | ACCESS_TYPE_WRITE
+						| ACCESS_TYPE_EXECUTE))) {
+			access_type |= ACCESS_TYPE_READ | ACCESS_TYPE_WRITE
+				| ACCESS_TYPE_EXECUTE;
+		}
+
+		if (!(access_type & ACCESS_TYPE_SIZE_ANY)) {
+			access_type |= ACCESS_TYPE_SIZE_ANY;
+		}
+
+		//If no IO or non-IO is specified, both are assumed
+		if (!(access_type & (ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO))) {
+			access_type |= ACCESS_TYPE_IO | ACCESS_TYPE_NON_IO;
+		}
+
+		std::string read_handler;
+		std::string write_handler;
+
+		s2e()->getDebugStream()
+			<< "[MemoryInterceptorReplay] Adding annotation "
+			<< "for memory range " << hexval(address) << "-"
+			<< hexval(address + size) << " with access type "
+			<< hexval(access_type) << "\n";
+
+		m_memoryInterceptor->addInterceptor(
+				new MemoryInterceptorReplayHandler(m_s2e, address, size, access_type));
+	}
+
+	return true;
+}
+
+MemoryInterceptorReplayHandler::MemoryInterceptorReplayHandler(
+	S2E* s2e, uint64_t address, uint64_t size, int mask)
+		: MemoryAccessHandler(s2e, address, size, mask)
+{
+	m_replayMemoryAccesses = static_cast<ReplayMemoryAccesses *>(s2e->getPlugin(
+				"ReplayMemoryAccesses"));
+	assert(m_replayMemoryAccesses);
+	m_s2e = m_replayMemoryAccesses->m_s2e;
+	assert(m_s2e);
+}
+
+klee::ref<klee::Expr> MemoryInterceptorReplayHandler::read(S2EExecutionState *state,
         klee::ref<klee::Expr> virtaddr /* virtualAddress */,
         klee::ref<klee::Expr> hostaddr /* hostAddress */,
         unsigned size,
@@ -51,7 +197,7 @@ klee::ref<klee::Expr> ReplayMemoryAccesses::slotMemoryRead(S2EExecutionState *st
 	klee::Expr::Width width;
 	uint64_t value = 0;
 
-	if (m_skipCode && is_code)
+	if (m_replayMemoryAccesses->m_skipCode && is_code)
 		return klee::ref<klee::Expr>();
 
 	if (is_code)
@@ -89,9 +235,8 @@ klee::ref<klee::Expr> ReplayMemoryAccesses::slotMemoryRead(S2EExecutionState *st
 			assert(false && "Unknown memory access size");
 	}
 
-	if (this->m_verbose)
-	{
-		s2e()->getDebugStream()
+	if (m_replayMemoryAccesses->m_verbose) {
+		m_s2e->getDebugStream()
 			<< "[ReplayMemoryAccesses] slotMemoryRead called with address = " << hexval(address)
 			<< ((access_type & ACCESS_TYPE_CONCRETE_ADDRESS) ? " [concrete]" : " [symbolic]")
 			<< ", access_type = " << hexval(access_type)
@@ -101,13 +246,13 @@ klee::ref<klee::Expr> ReplayMemoryAccesses::slotMemoryRead(S2EExecutionState *st
 			<< '\n';
 	}
 
-	if (!setValueFromNext(address, false, size, &value)) {
+	if (!m_replayMemoryAccesses->setValueFromNext(address, false, size, &value)) {
 		value = 0xDEAD;
-		s2e()->getDebugStream()
+		m_s2e->getDebugStream()
 			<< "[ReplayMemoryAccesses] failed to set value for address = " <<
 			hexval(address) << '\n';
 	} else {
-		s2e()->getDebugStream()
+		m_s2e->getDebugStream()
 			<< "[ReplayMemoryAccesses] set value for address = " <<
 			hexval(address) << " to " << hexval(value) << '\n';
 	}
@@ -157,7 +302,7 @@ bool ReplayMemoryAccesses::setValueFromNext(uint64_t address, bool isWrite,
 	return false;
 }
 
-bool ReplayMemoryAccesses::slotMemoryWrite(S2EExecutionState *state,
+bool MemoryInterceptorReplayHandler::write(S2EExecutionState *state,
         klee::ref<klee::Expr> virtaddr /* virtualAddress */,
         klee::ref<klee::Expr> hostaddr /* hostAddress */,
         klee::ref<klee::Expr> value,
@@ -202,9 +347,9 @@ bool ReplayMemoryAccesses::slotMemoryWrite(S2EExecutionState *state,
 			assert(false && "Unknown memory access size");
 	}
 
-	if (this->m_verbose)
+	if (m_replayMemoryAccesses->m_verbose)
 	{
-		s2e()->getDebugStream()
+		m_s2e->getDebugStream()
 			<< "[ReplayMemoryAccesses] slotMemoryWrite called with address = " << hexval(address)
 			<< ((access_type & ACCESS_TYPE_CONCRETE_ADDRESS) ? " [concrete]" : " [symbolic]")
 			<< ", access_type = " << hexval(access_type)
