@@ -24,6 +24,7 @@ S2E_DEFINE_PLUGIN(ReplayMemoryAccesses,
 void ReplayMemoryAccesses::initialize()
 {
 	m_verbose = s2e()->getConfig()->getBool(getConfigKey()+".verbose");
+	m_skipCode = s2e()->getConfig()->getBool(getConfigKey()+".skipCode", true);
 	m_inputFileName = s2e()->getConfig()->getString(getConfigKey()+".replayTraceFileName");
 
 	m_inputFile.open(m_inputFileName.c_str(), std::ifstream::in | std::ifstream::binary);
@@ -49,6 +50,9 @@ klee::ref<klee::Expr> ReplayMemoryAccesses::slotMemoryRead(S2EExecutionState *st
 	uint64_t address = 0;
 	klee::Expr::Width width;
 	uint64_t value = 0;
+
+	if (m_skipCode && is_code)
+		return klee::ref<klee::Expr>();
 
 	if (is_code)
 		access_type |= ACCESS_TYPE_EXECUTE;

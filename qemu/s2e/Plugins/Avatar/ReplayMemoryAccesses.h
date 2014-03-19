@@ -23,6 +23,7 @@ class ReplayMemoryAccesses : public Plugin
 			S2E* m_s2e;
 			std::string m_inputFileName;
 			bool m_verbose;
+			bool m_skipCode;
 
 			std::ifstream m_inputFile;
 			bool updateNextMemoryAccess();
