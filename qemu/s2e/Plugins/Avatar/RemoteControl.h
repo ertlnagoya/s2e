@@ -1,6 +1,7 @@
 /*
  * S2E Selective Symbolic Execution Framework
  *
+ * Copyright (c) 2013-2014, EURECOM
  * Copyright (c) 2010, Dependable Systems Laboratory, EPFL
  * All rights reserved.
  *
@@ -27,6 +28,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Currently maintained by:
+ *    Jonas Zaddach <zaddach@eurecom.fr>
  *    Vitaly Chipounov <vitaly.chipounov@epfl.ch>
  *    Volodymyr Kuznetsov <vova.kuznetsov@epfl.ch>
  *
@@ -34,8 +36,8 @@
  *
  */
 
-#ifndef S2E_PLUGINS_REMOTECONTROL_H
-#define S2E_PLUGINS_REMOTECONTROL_H
+#ifndef S2E_PLUGINS_AVATAR_REMOTECONTROL_H
+#define S2E_PLUGINS_AVATAR_REMOTECONTROL_H
 
 #include <s2e/Plugin.h>
 #include <s2e/Plugins/CorePlugin.h>
@@ -62,15 +64,15 @@ namespace plugins {
       ~RemoteControlInvoker();
 
   public:
-      int listInjections(lua_State *L);
+//      int listInjections(lua_State *L);
       int listStates(lua_State* L);
       int setForkMode(lua_State* L);
       int killState(lua_State * lua);
-      int injectConstant(lua_State * lua);
-      int injectConstantIncrementor(lua_State * lua);
-      int injectSymbolic(lua_State * lua);
-      int injectSymbolicRefresher(lua_State * lua);
-      int removeInjector(lua_State * lua);
+//      int injectConstant(lua_State * lua);
+//      int injectConstantIncrementor(lua_State * lua);
+//      int injectSymbolic(lua_State * lua);
+//      int injectSymbolicRefresher(lua_State * lua);
+//      int removeInjector(lua_State * lua);
   private:
       S2EExecutionState * getExecutionState(int id);
       void setError(lua_State *lua, std::string msg);
@@ -108,4 +110,4 @@ private:
 } // namespace plugins
 } // namespace s2e
 
-#endif // S2E_PLUGINS_REMOTECONTROL_H
+#endif // S2E_PLUGINS_AVATAR_REMOTECONTROL_H

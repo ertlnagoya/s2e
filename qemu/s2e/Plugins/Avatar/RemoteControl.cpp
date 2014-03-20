@@ -36,7 +36,7 @@
  */
 
 #include "s2e/Plugins/Initializer.h"
-#include "s2e/Plugins/RemoteControl.h"
+#include "s2e/Plugins/Avatar/RemoteControl.h"
 #include <s2e/S2E.h>
 #include <s2e/ConfigFile.h>
 #include <s2e/Utils.h>
@@ -73,14 +73,15 @@ namespace s2e
 
         const char RemoteControlInvoker::className[] = "RemoteControlInvoker";
         Lunar<RemoteControlInvoker>::RegType RemoteControlInvoker::methods[] =
-            { LUNAR_DECLARE_METHOD(RemoteControlInvoker, listInjections),
+            {
+//            LUNAR_DECLARE_METHOD(RemoteControlInvoker, listInjections),
               LUNAR_DECLARE_METHOD(RemoteControlInvoker, listStates),
               LUNAR_DECLARE_METHOD(RemoteControlInvoker, setForkMode),
-              LUNAR_DECLARE_METHOD(RemoteControlInvoker, injectConstant),
-              LUNAR_DECLARE_METHOD(RemoteControlInvoker, injectConstantIncrementor),
-              LUNAR_DECLARE_METHOD(RemoteControlInvoker, injectSymbolic),
-              LUNAR_DECLARE_METHOD(RemoteControlInvoker, injectSymbolicRefresher),
-              LUNAR_DECLARE_METHOD(RemoteControlInvoker, removeInjector),
+//              LUNAR_DECLARE_METHOD(RemoteControlInvoker, injectConstant),
+//              LUNAR_DECLARE_METHOD(RemoteControlInvoker, injectConstantIncrementor),
+//              LUNAR_DECLARE_METHOD(RemoteControlInvoker, injectSymbolic),
+//              LUNAR_DECLARE_METHOD(RemoteControlInvoker, injectSymbolicRefresher),
+//              LUNAR_DECLARE_METHOD(RemoteControlInvoker, removeInjector),
               LUNAR_DECLARE_METHOD(RemoteControlInvoker, killState),
               { 0, 0 }
             };
@@ -107,103 +108,103 @@ namespace s2e
 
         }
 
-        int
-        RemoteControlInvoker::listInjections(lua_State * lua)
-        {
-            MemInjector2 * memInjector =
-                    static_cast<MemInjector2 *>(g_s2e->getPlugin("MemInjector2"));
-
-            if (memInjector == 0)
-            {
-                g_s2e->getWarningsStream()
-                        << "[RemoteControl]: MemInjector2 plugin not found. Aborting"
-                        << '\n';
-                return 0;
-            }
-
-            QDict * dict = qdict_new();
-            QList * list = qlist_new();
-
-            foreach(const MemInjector2::Injector injector, memInjector->listInjectors())
-            {
-                QDict * injDict = qdict_new();
-
-                qdict_put(injDict, "address", qint_from_int(injector.address));
-                qdict_put(injDict, "width", qint_from_int(injector.width));
-                qdict_put(injDict, "state", qint_from_int(injector.state_id));
-                qdict_put(injDict, "active", qbool_from_int(1));
-
-                switch (injector.type)
-                {
-                case MemInjector2::INJ_CONSTANT:
-                    qdict_put(injDict, "type", qstring_from_str("constant"));
-                    qdict_put(injDict, "value", qint_from_int(injector.aux));
-                    break;
-                case MemInjector2::INJ_INCREMENTOR:
-                    qdict_put(injDict, "type",
-                            qstring_from_str("constant_incrementor"));
-                    qdict_put(injDict, "max_value",
-                            qint_from_int(injector.aux));
-                    break;
-                case MemInjector2::INJ_SYMBOLIC:
-                    qdict_put(injDict, "type", qstring_from_str("symbolic"));
-                    break;
-                case MemInjector2::INJ_SREFRESHER:
-                    qdict_put(injDict, "type",
-                            qstring_from_str("symbolic_refresher"));
-                    qdict_put(injDict, "max_refresh",
-                            qint_from_int(injector.aux));
-                    break;
-                }
-
-                qlist_append(list, injDict);
-            }
-
-            foreach(const MemInjector2::Injector injector, memInjector->listQueuedInjectors())
-            {
-                QDict * injDict = qdict_new();
-
-                qdict_put(injDict, "address", qint_from_int(injector.address));
-                qdict_put(injDict, "width", qint_from_int(injector.width));
-                qdict_put(injDict, "state", qint_from_int(injector.state_id));
-                qdict_put(injDict, "active", qbool_from_int(0));
-
-                switch (injector.type)
-                {
-                case MemInjector2::INJ_CONSTANT:
-                    qdict_put(injDict, "type", qstring_from_str("constant"));
-                    qdict_put(injDict, "value", qint_from_int(injector.aux));
-                    break;
-                case MemInjector2::INJ_INCREMENTOR:
-                    qdict_put(injDict, "type",
-                            qstring_from_str("constant_incrementor"));
-                    qdict_put(injDict, "max_value",
-                            qint_from_int(injector.aux));
-                    break;
-                case MemInjector2::INJ_SYMBOLIC:
-                    qdict_put(injDict, "type", qstring_from_str("symbolic"));
-                    break;
-                case MemInjector2::INJ_SREFRESHER:
-                    qdict_put(injDict, "type",
-                            qstring_from_str("symbolic_refresher"));
-                    qdict_put(injDict, "max_refresh",
-                            qint_from_int(injector.aux));
-                    break;
-                }
-
-                qlist_append(list, injDict);
-            }
-
-            qdict_put(dict, "injections", list);
-            QString * json = qobject_to_json(QOBJECT(dict));
-
-            lua_pushstring(lua, qstring_get_str(json));
-            lua_setglobal(lua, "returnvalue");
-
-            QDECREF(json);
-            QDECREF(dict);
-            return 0;
-        }
+//        int
+//        RemoteControlInvoker::listInjections(lua_State * lua)
+//        {
+//            MemInjector2 * memInjector =
+//                    static_cast<MemInjector2 *>(g_s2e->getPlugin("MemInjector2"));
+//
+//            if (memInjector == 0)
+//            {
+//                g_s2e->getWarningsStream()
+//                        << "[RemoteControl]: MemInjector2 plugin not found. Aborting"
+//                        << '\n';
+//                return 0;
+//            }
+//
+//            QDict * dict = qdict_new();
+//            QList * list = qlist_new();
+//
+//            foreach(const MemInjector2::Injector injector, memInjector->listInjectors())
+//            {
+//                QDict * injDict = qdict_new();
+//
+//                qdict_put(injDict, "address", qint_from_int(injector.address));
+//                qdict_put(injDict, "width", qint_from_int(injector.width));
+//                qdict_put(injDict, "state", qint_from_int(injector.state_id));
+//                qdict_put(injDict, "active", qbool_from_int(1));
+//
+//                switch (injector.type)
+//                {
+//                case MemInjector2::INJ_CONSTANT:
+//                    qdict_put(injDict, "type", qstring_from_str("constant"));
+//                    qdict_put(injDict, "value", qint_from_int(injector.aux));
+//                    break;
+//                case MemInjector2::INJ_INCREMENTOR:
+//                    qdict_put(injDict, "type",
+//                            qstring_from_str("constant_incrementor"));
+//                    qdict_put(injDict, "max_value",
+//                            qint_from_int(injector.aux));
+//                    break;
+//                case MemInjector2::INJ_SYMBOLIC:
+//                    qdict_put(injDict, "type", qstring_from_str("symbolic"));
+//                    break;
+//                case MemInjector2::INJ_SREFRESHER:
+//                    qdict_put(injDict, "type",
+//                            qstring_from_str("symbolic_refresher"));
+//                    qdict_put(injDict, "max_refresh",
+//                            qint_from_int(injector.aux));
+//                    break;
+//                }
+//
+//                qlist_append(list, injDict);
+//            }
+//
+//            foreach(const MemInjector2::Injector injector, memInjector->listQueuedInjectors())
+//            {
+//                QDict * injDict = qdict_new();
+//
+//                qdict_put(injDict, "address", qint_from_int(injector.address));
+//                qdict_put(injDict, "width", qint_from_int(injector.width));
+//                qdict_put(injDict, "state", qint_from_int(injector.state_id));
+//                qdict_put(injDict, "active", qbool_from_int(0));
+//
+//                switch (injector.type)
+//                {
+//                case MemInjector2::INJ_CONSTANT:
+//                    qdict_put(injDict, "type", qstring_from_str("constant"));
+//                    qdict_put(injDict, "value", qint_from_int(injector.aux));
+//                    break;
+//                case MemInjector2::INJ_INCREMENTOR:
+//                    qdict_put(injDict, "type",
+//                            qstring_from_str("constant_incrementor"));
+//                    qdict_put(injDict, "max_value",
+//                            qint_from_int(injector.aux));
+//                    break;
+//                case MemInjector2::INJ_SYMBOLIC:
+//                    qdict_put(injDict, "type", qstring_from_str("symbolic"));
+//                    break;
+//                case MemInjector2::INJ_SREFRESHER:
+//                    qdict_put(injDict, "type",
+//                            qstring_from_str("symbolic_refresher"));
+//                    qdict_put(injDict, "max_refresh",
+//                            qint_from_int(injector.aux));
+//                    break;
+//                }
+//
+//                qlist_append(list, injDict);
+//            }
+//
+//            qdict_put(dict, "injections", list);
+//            QString * json = qobject_to_json(QOBJECT(dict));
+//
+//            lua_pushstring(lua, qstring_get_str(json));
+//            lua_setglobal(lua, "returnvalue");
+//
+//            QDECREF(json);
+//            QDECREF(dict);
+//            return 0;
+//        }
 
         int
         RemoteControlInvoker::listStates(lua_State* lua)
@@ -291,171 +292,171 @@ namespace s2e
             QDECREF(json);
         }
 
-        int
-        RemoteControlInvoker::injectConstant(lua_State * lua)
-        {
-            int state = lua_tointeger(lua, lua_gettop(lua));
-            lua_pop(lua, 1);
-            uint32_t width = static_cast<uint32_t>(lua_tointeger(lua,
-                    lua_gettop(lua)));
-            lua_pop(lua, 1);
-            uint32_t value = static_cast<uint32_t>(lua_tointeger(lua,
-                    lua_gettop(lua)));
-            lua_pop(lua, 1);
-            uint32_t address = static_cast<uint32_t>(lua_tointeger(lua,
-                    lua_gettop(lua)));
-            lua_pop(lua, 1);
-
-            MemInjector2 * plg = static_cast<MemInjector2 *>(g_s2e->getPlugin(
-                    "MemInjector2"));
-
-            if (!plg)
-            {
-                setError(lua, "MemInjector2 plugin not found");
-                g_s2e->getWarningsStream()
-                        << "[RemoteControlInvoker]: MemInjector2 plugin not found"
-                        << '\n';
-                return 0;
-            }
-
-            g_s2e->getDebugStream()
-                    << "[RemoteControlInvoker]: calling addConstantInjector("
-                    << hexval(address) << ", " << hexval(value)
-                    << ", "  << width << ", "  << state
-                    << ")" << '\n';
-            plg->addConstantInjector(address, value, width, state);
-
-            return 0;
-        }
-
-        int
-        RemoteControlInvoker::injectConstantIncrementor(lua_State * lua)
-        {
-            int state = lua_tointeger(lua, lua_gettop(lua));
-            lua_pop(lua, 1);
-            uint32_t width = static_cast<uint32_t>(lua_tointeger(lua,
-                    lua_gettop(lua)));
-            lua_pop(lua, 1);
-            uint32_t max_value = static_cast<uint32_t>(lua_tointeger(lua,
-                    lua_gettop(lua)));
-            lua_pop(lua, 1);
-            uint32_t address = static_cast<uint32_t>(lua_tointeger(lua,
-                    lua_gettop(lua)));
-            lua_pop(lua, 1);
-
-            MemInjector2 * plg = static_cast<MemInjector2 *>(g_s2e->getPlugin(
-                    "MemInjector2"));
-
-            if (!plg)
-            {
-                setError(lua, "MemInjector2 plugin not found");
-                g_s2e->getWarningsStream()
-                        << "[RemoteControlInvoker]: MemInjector2 plugin not found"
-                        << '\n';
-                return 0;
-            }
-
-            g_s2e->getDebugStream()
-                    << "[RemoteControlInvoker]: calling addConstantIncrementor("
-                    << hexval(address) << ", " << hexval(max_value)
-                    << ", "  << width << ", "  << state
-                    << ")" << '\n';
-            plg->addConstantIncrementor(address, max_value, width, state);
-
-            return 0;
-        }
-
-        int
-        RemoteControlInvoker::injectSymbolic(lua_State * lua)
-        {
-            int state = lua_tointeger(lua, lua_gettop(lua));
-            lua_pop(lua, 1);
-            uint32_t width = static_cast<uint32_t>(lua_tointeger(lua,
-                    lua_gettop(lua)));
-            lua_pop(lua, 1);
-            uint32_t address = static_cast<uint32_t>(lua_tointeger(lua,
-                    lua_gettop(lua)));
-            lua_pop(lua, 1);
-
-            MemInjector2 * plg = static_cast<MemInjector2 *>(g_s2e->getPlugin(
-                    "MemInjector2"));
-
-            if (!plg)
-            {
-                setError(lua, "MemInjector2 plugin not found");
-                g_s2e->getWarningsStream()
-                        << "[RemoteControlInvoker]: MemInjector2 plugin not found"
-                        << '\n';
-                return 0;
-            }
-
-            g_s2e->getDebugStream()
-                    << "[RemoteControlInvoker]: calling addSymbolicInjector("
-                    << hexval(address) << ", "  << width << ", "
-                     << state << ")" << '\n';
-            plg->addSymbolicInjector(address, width, state);
-
-            return 0;
-        }
-
-        int
-        RemoteControlInvoker::injectSymbolicRefresher(lua_State * lua)
-        {
-            int state = lua_tointeger(lua, lua_gettop(lua));
-            lua_pop(lua, 1);
-            uint32_t width = static_cast<uint32_t>(lua_tointeger(lua,
-                    lua_gettop(lua)));
-            lua_pop(lua, 1);
-            uint32_t max_refreshs = static_cast<uint32_t>(lua_tointeger(lua,
-                    lua_gettop(lua)));
-            lua_pop(lua, 1);
-            uint32_t address = static_cast<uint32_t>(lua_tointeger(lua,
-                    lua_gettop(lua)));
-            lua_pop(lua, 1);
-
-            MemInjector2 * plg = static_cast<MemInjector2 *>(g_s2e->getPlugin(
-                    "MemInjector2"));
-
-            if (!plg)
-            {
-                setError(lua, "MemInjector2 plugin not found");
-                g_s2e->getWarningsStream()
-                        << "[RemoteControlInvoker]: MemInjector2 plugin not found"
-                        << '\n';
-                return 0;
-            }
-
-            g_s2e->getDebugStream()
-                    << "[RemoteControlInvoker]: calling addConstantInjector("
-                    << hexval(address) << ", " << hexval(max_refreshs)
-                    << ", "  << width << ", "  << state
-                    << ")" << '\n';
-            plg->addSymbolicRefresher(address, max_refreshs, width, state);
-
-            return 0;
-        }
-
-        int RemoteControlInvoker::removeInjector(lua_State * lua)
-        {
-            int address = lua_tointeger(lua, lua_gettop(lua));
-            lua_pop(lua, 1);
-
-            MemInjector2 * plg = static_cast<MemInjector2 *>(g_s2e->getPlugin(
-                                "MemInjector2"));
-
-                        if (!plg)
-                        {
-                            setError(lua, "MemInjector2 plugin not found");
-                            g_s2e->getWarningsStream()
-                                    << "[RemoteControlInvoker]: MemInjector2 plugin not found"
-                                    << '\n';
-                            return 0;
-                        }
-
-            plg->removeInjector(address);
-
-            return 0;
-        }
+//        int
+//        RemoteControlInvoker::injectConstant(lua_State * lua)
+//        {
+//            int state = lua_tointeger(lua, lua_gettop(lua));
+//            lua_pop(lua, 1);
+//            uint32_t width = static_cast<uint32_t>(lua_tointeger(lua,
+//                    lua_gettop(lua)));
+//            lua_pop(lua, 1);
+//            uint32_t value = static_cast<uint32_t>(lua_tointeger(lua,
+//                    lua_gettop(lua)));
+//            lua_pop(lua, 1);
+//            uint32_t address = static_cast<uint32_t>(lua_tointeger(lua,
+//                    lua_gettop(lua)));
+//            lua_pop(lua, 1);
+//
+//            MemInjector2 * plg = static_cast<MemInjector2 *>(g_s2e->getPlugin(
+//                    "MemInjector2"));
+//
+//            if (!plg)
+//            {
+//                setError(lua, "MemInjector2 plugin not found");
+//                g_s2e->getWarningsStream()
+//                        << "[RemoteControlInvoker]: MemInjector2 plugin not found"
+//                        << '\n';
+//                return 0;
+//            }
+//
+//            g_s2e->getDebugStream()
+//                    << "[RemoteControlInvoker]: calling addConstantInjector("
+//                    << hexval(address) << ", " << hexval(value)
+//                    << ", "  << width << ", "  << state
+//                    << ")" << '\n';
+//            plg->addConstantInjector(address, value, width, state);
+//
+//            return 0;
+//        }
+//
+//        int
+//        RemoteControlInvoker::injectConstantIncrementor(lua_State * lua)
+//        {
+//            int state = lua_tointeger(lua, lua_gettop(lua));
+//            lua_pop(lua, 1);
+//            uint32_t width = static_cast<uint32_t>(lua_tointeger(lua,
+//                    lua_gettop(lua)));
+//            lua_pop(lua, 1);
+//            uint32_t max_value = static_cast<uint32_t>(lua_tointeger(lua,
+//                    lua_gettop(lua)));
+//            lua_pop(lua, 1);
+//            uint32_t address = static_cast<uint32_t>(lua_tointeger(lua,
+//                    lua_gettop(lua)));
+//            lua_pop(lua, 1);
+//
+//            MemInjector2 * plg = static_cast<MemInjector2 *>(g_s2e->getPlugin(
+//                    "MemInjector2"));
+//
+//            if (!plg)
+//            {
+//                setError(lua, "MemInjector2 plugin not found");
+//                g_s2e->getWarningsStream()
+//                        << "[RemoteControlInvoker]: MemInjector2 plugin not found"
+//                        << '\n';
+//                return 0;
+//            }
+//
+//            g_s2e->getDebugStream()
+//                    << "[RemoteControlInvoker]: calling addConstantIncrementor("
+//                    << hexval(address) << ", " << hexval(max_value)
+//                    << ", "  << width << ", "  << state
+//                    << ")" << '\n';
+//            plg->addConstantIncrementor(address, max_value, width, state);
+//
+//            return 0;
+//        }
+//
+//        int
+//        RemoteControlInvoker::injectSymbolic(lua_State * lua)
+//        {
+//            int state = lua_tointeger(lua, lua_gettop(lua));
+//            lua_pop(lua, 1);
+//            uint32_t width = static_cast<uint32_t>(lua_tointeger(lua,
+//                    lua_gettop(lua)));
+//            lua_pop(lua, 1);
+//            uint32_t address = static_cast<uint32_t>(lua_tointeger(lua,
+//                    lua_gettop(lua)));
+//            lua_pop(lua, 1);
+//
+//            MemInjector2 * plg = static_cast<MemInjector2 *>(g_s2e->getPlugin(
+//                    "MemInjector2"));
+//
+//            if (!plg)
+//            {
+//                setError(lua, "MemInjector2 plugin not found");
+//                g_s2e->getWarningsStream()
+//                        << "[RemoteControlInvoker]: MemInjector2 plugin not found"
+//                        << '\n';
+//                return 0;
+//            }
+//
+//            g_s2e->getDebugStream()
+//                    << "[RemoteControlInvoker]: calling addSymbolicInjector("
+//                    << hexval(address) << ", "  << width << ", "
+//                     << state << ")" << '\n';
+//            plg->addSymbolicInjector(address, width, state);
+//
+//            return 0;
+//        }
+//
+//        int
+//        RemoteControlInvoker::injectSymbolicRefresher(lua_State * lua)
+//        {
+//            int state = lua_tointeger(lua, lua_gettop(lua));
+//            lua_pop(lua, 1);
+//            uint32_t width = static_cast<uint32_t>(lua_tointeger(lua,
+//                    lua_gettop(lua)));
+//            lua_pop(lua, 1);
+//            uint32_t max_refreshs = static_cast<uint32_t>(lua_tointeger(lua,
+//                    lua_gettop(lua)));
+//            lua_pop(lua, 1);
+//            uint32_t address = static_cast<uint32_t>(lua_tointeger(lua,
+//                    lua_gettop(lua)));
+//            lua_pop(lua, 1);
+//
+//            MemInjector2 * plg = static_cast<MemInjector2 *>(g_s2e->getPlugin(
+//                    "MemInjector2"));
+//
+//            if (!plg)
+//            {
+//                setError(lua, "MemInjector2 plugin not found");
+//                g_s2e->getWarningsStream()
+//                        << "[RemoteControlInvoker]: MemInjector2 plugin not found"
+//                        << '\n';
+//                return 0;
+//            }
+//
+//            g_s2e->getDebugStream()
+//                    << "[RemoteControlInvoker]: calling addConstantInjector("
+//                    << hexval(address) << ", " << hexval(max_refreshs)
+//                    << ", "  << width << ", "  << state
+//                    << ")" << '\n';
+//            plg->addSymbolicRefresher(address, max_refreshs, width, state);
+//
+//            return 0;
+//        }
+//
+//        int RemoteControlInvoker::removeInjector(lua_State * lua)
+//        {
+//            int address = lua_tointeger(lua, lua_gettop(lua));
+//            lua_pop(lua, 1);
+//
+//            MemInjector2 * plg = static_cast<MemInjector2 *>(g_s2e->getPlugin(
+//                                "MemInjector2"));
+//
+//                        if (!plg)
+//                        {
+//                            setError(lua, "MemInjector2 plugin not found");
+//                            g_s2e->getWarningsStream()
+//                                    << "[RemoteControlInvoker]: MemInjector2 plugin not found"
+//                                    << '\n';
+//                            return 0;
+//                        }
+//
+//            plg->removeInjector(address);
+//
+//            return 0;
+//        }
 
         int
         RemoteControlInvoker::setForkMode(lua_State * lua)
