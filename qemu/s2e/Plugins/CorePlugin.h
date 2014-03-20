@@ -42,7 +42,9 @@
 #include <s2e/Signals/Signals.h>
 #include <vector>
 #include <inttypes.h>
+extern "C" {
 #include <cpu.h>
+}
 #include <s2e/s2e_qemu.h>
 
 extern "C" {
