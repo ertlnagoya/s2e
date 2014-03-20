@@ -3723,6 +3723,11 @@ int main(int argc, char **argv, char **envp)
     if (machine->compat_props) {
         qdev_prop_register_global_list(machine->compat_props);
     }
+
+#ifdef CONFIG_S2E
+    s2e_machine_name = strdup(machine->name);
+    s2e_cpu_name = strdup(cpu_model);
+#endif /* CONFIG_S2E */
     qemu_add_globals();
 
     qdev_machine_init();

@@ -71,6 +71,9 @@ struct PCIBus;
 /* This should never be accessed from C++ code */
 extern struct S2EExecutionState* g_s2e_state;
 
+extern const char * s2e_machine_name;
+extern const char * s2e_cpu_name;
+
 /**************************/
 /* Functions from S2E.cpp */
 

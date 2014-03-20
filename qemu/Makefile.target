@@ -553,6 +553,7 @@ s2eobj-y += s2e/Plugins/Avatar/IdentifyMemoryRegions.o
 s2eobj-y += s2e/Plugins/Avatar/ControlFlowGraph.o
 s2eobj-y += s2e/Plugins/Avatar/ReplayMemoryAccesses.o
 s2eobj-y += s2e/Plugins/Avatar/RemoteControl.o
+s2eobj-y += s2e/Plugins/Avatar/Snapshot.o
 
 
 ifeq ($(TARGET_BASE_ARCH), i386)

@@ -870,5 +870,8 @@ int g_s2e_linked = 1;
 
 }
 
+const char * s2e_machine_name;
+const char * s2e_cpu_name;
+
 
 } // extern "C"
