@@ -52,7 +52,8 @@ extern "C" {
 namespace s2e {
 namespace plugins {
 
-S2E_DEFINE_PLUGIN(Annotation, "Bypasses functions at run-time", "Annotation");
+S2E_DEFINE_PLUGIN(Annotation, "Bypasses functions at run-time", "Annotation",
+		"ModuleExecutionDetector");
 
 void Annotation::initialize()
 {
@@ -313,25 +314,6 @@ void Annotation::onDataMemoryAccess(S2EExecutionState *state,
             lua_pushboolean(L, isIO);
 
             lua_call(L, 7, 0);
-            /*
-            lua_call(L, 7, 2);
-
-            bool is_symbolic = lua_toboolean(L, lua_gettop(L) - 1);
-
-            //TODO: What if serveral annotations exist?
-            if (is_symbolic)
-            {
-                std::string value_name(lua_tostring(L, lua_gettop(L)));
-                lua_pop(L, 2);
-                return state->createSymbolicValue(value_name, value->getWidth());
-            }
-            else
-            {
-                uint64_t new_value = lua_tonumber(L, lua_gettop(L));
-                lua_pop(L, 2);
-                return klee::ref<klee::Expr>(klee::ConstantExpr::create(new_value, value->getWidth()));
-            }
-            */
         }
     }
 }
