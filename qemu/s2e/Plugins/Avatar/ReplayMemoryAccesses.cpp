@@ -369,6 +369,7 @@ bool ReplayMemoryAccesses::updateNextMemoryAccess()
 {
 	/* return true if next was found */
 	assert(m_nextToMatch);
+	static char scrap_buffer[512];
 
 	while (!m_inputFile.eof()) {
 		m_inputFile.read((char *)&mLastHdr, sizeof mLastHdr);
@@ -382,10 +383,15 @@ bool ReplayMemoryAccesses::updateNextMemoryAccess()
 
 		if (mLastHdr.stateId == m_stateId &&
 				mLastHdr.type == TRACE_MEMORY) {
+			assert(sizeof *m_nextToMatch == mLastHdr.size);
 			m_inputFile.read((char *) m_nextToMatch, sizeof *m_nextToMatch);
 			if (m_inputFile.gcount() != sizeof *m_nextToMatch)
 				return false;
 			return true;
+		} else {
+			/* we should read the uninteresting stuff in a scrap buffer */
+			assert(mLastHdr.size <= sizeof scrap_buffer);
+			m_inputFile.read((char *) scrap_buffer, mLastHdr.size);
 		}
 	}
 
