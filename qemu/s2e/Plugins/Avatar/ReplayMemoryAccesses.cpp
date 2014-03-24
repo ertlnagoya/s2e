@@ -246,6 +246,8 @@ klee::ref<klee::Expr> MemoryInterceptorReplayHandler::read(S2EExecutionState *st
 			<< '\n';
 	}
 
+	assert(0 == (access_type & ACCESS_TYPE_WRITE));
+
 	if (!m_replayMemoryAccesses->setValueFromNext(address, false, size, &value)) {
 		value = 0xDEAD;
 		m_s2e->getDebugStream()
@@ -299,6 +301,7 @@ bool ReplayMemoryAccesses::setValueFromNext(uint64_t address, bool isWrite,
 		++skipped;
 	}
 
+	assert(!m_inputFile.eof());
 	return false;
 }
 
@@ -386,7 +389,7 @@ bool ReplayMemoryAccesses::updateNextMemoryAccess()
 		}
 	}
 
-	return true;
+	return false;
 }
 
 }
