@@ -61,7 +61,7 @@ bool ReplayMemoryAccesses::setupRangeListeners()
 			getConfigKey() + ".ranges", &ok);
 	if (!ok) {
 		s2e()->getWarningsStream()
-			<< "[MemoryInterceptorReplay] Error reading subkey .intereceptors"
+			<< "[ReplayMemoryAccesses] Error reading subkey .intereceptors"
 			<< '\n';
 		return false;
 	}
@@ -74,7 +74,7 @@ bool ReplayMemoryAccesses::setupRangeListeners()
 				getConfigKey() + ".ranges." + *plugins_itr, &ok);
 		if (!ok) {
 			s2e()->getWarningsStream()
-				<< "[MemoryInterceptorReplay] Error reading subkey .ranges."
+				<< "[ReplayMemoryAccesses] Error reading subkey .ranges."
 				<< *plugins_itr << '\n';
 			return false;
 		}
@@ -86,7 +86,7 @@ bool ReplayMemoryAccesses::setupRangeListeners()
 				|| !cfg->hasKey(interceptor_key + ".access_type"))
 		{
 			s2e()->getWarningsStream()
-				<< "[MemoryInterceptorReplay] Error: subkey .address, .size "
+				<< "[ReplayMemoryAccesses] Error: subkey .address, .size "
 				<< "or .access_type for key " << interceptor_key
 				<< " missing!" << '\n';
 			return false;
@@ -100,7 +100,7 @@ bool ReplayMemoryAccesses::setupRangeListeners()
 					ConfigFile::string_list(), &ok);
 		if (!ok) {
 			s2e()->getWarningsStream()
-				<< "[MemoryInterceptorReplay] Error reading subkey "
+				<< "[ReplayMemoryAccesses] Error reading subkey "
 				<< interceptor_key
 				<< ".access_type"
 				<< '\n';
@@ -163,7 +163,7 @@ bool ReplayMemoryAccesses::setupRangeListeners()
 		std::string write_handler;
 
 		s2e()->getDebugStream()
-			<< "[MemoryInterceptorReplay] Adding annotation "
+			<< "[ReplayMemoryAccesses] Adding annotation "
 			<< "for memory range " << hexval(address) << "-"
 			<< hexval(address + size) << " with access type "
 			<< hexval(access_type) << "\n";
