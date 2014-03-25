@@ -42,6 +42,9 @@
 
 extern "C" {
 #include <sysemu.h>
+#include <cpu-all.h>
+#include <qemu-queue.h>
+#include <memory.h>
 }
 
 #include <llvm/Support/Path.h>
@@ -57,7 +60,8 @@ static const uint32_t S2E_SS_FILE_VERSION = 1;
 enum S2ESnapshotSectionTypes
 {
 	S2E_SS_SECTION_TYPE_CPU = 0,
-	S2E_SS_SECTION_TYPE_MACHINE = 1
+	S2E_SS_SECTION_TYPE_MACHINE = 1,
+	S2E_SS_SECTION_TYPE_RAM = 2
 };
 
 enum S2ESnapshotSectionMarkers
@@ -83,6 +87,7 @@ enum S2ESnapshotEndianess
 
 static const char* S2E_SS_SECTION_NAME_CPU = "cpu";
 static const char* S2E_SS_SECTION_NAME_MACHINE = "machine";
+static const char* S2E_SS_SECTION_NAME_RAM = "memory";
 
 static const unsigned MAX_SNAPSHOT_FILES = 1000;
 
@@ -92,13 +97,58 @@ namespace plugins {
 S2E_DEFINE_PLUGIN(Snapshot, "Snapshot taking and reverting from S2E", "Snapshot",);
 
 Snapshot* Snapshot::s_self = NULL;
+Snapshot::MemoryRangeList Snapshot::s_defaultSnapshotMemoryRanges;
+
+static Snapshot::MemoryRangeList getRanges(lua_State* L)
+{
+	Snapshot::MemoryRangeList ranges;
+
+	lua_pushnil(L);  /* first key */
+	while (lua_next(L, -2) != 0)
+	{
+	   /* uses 'key' (at index -2) and 'value' (at index -1) */
+	   lua_getfield(L, -1, "address");
+	   uint64_t address = lua_tointeger(L, -1);
+	   lua_getfield(L, -2, "size");
+	   uint64_t size = lua_tointeger(L, -1);
+	   lua_pop(L, 3);
+
+	   ranges.push_back(std::make_pair(address, size));
+	}
+
+	return ranges;
+}
 
 int Snapshot::luaTakeSnapshot(lua_State* L)  {
 	assert(s_self);
 
-	std::string name = lua_tostring(L, lua_gettop(L));
-	unsigned flags = lua_tointeger(L, lua_gettop(L) - 1);
-	s_self->takeSnapshot((S2EExecutionState*) g_s2e_state, name, flags);
+	std::string name;
+	unsigned flags;
+	std::list< std::pair< uint64_t, uint64_t> > ranges;
+
+	if (lua_gettop(L) == 1)  {
+		name = lua_tointeger(L, lua_gettop(L) - 0);
+		//TODO: Update this default when more snapshot stuff is available
+		flags = SNAPSHOT_MACHINE | SNAPSHOT_CPU | SNAPSHOT_MEMORY;
+		ranges = s_defaultSnapshotMemoryRanges;
+	}
+	else if (lua_gettop(L) == 2)  {
+		std::string name = lua_tostring(L, lua_gettop(L) - 1);
+		flags = lua_tointeger(L, lua_gettop(L) - 0);
+		ranges = s_defaultSnapshotMemoryRanges;
+	}
+	else if (lua_gettop(L) == 3)  {
+		std::string name = lua_tostring(L, lua_gettop(L) - 2);
+		flags = lua_tointeger(L, lua_gettop(L) - 1);
+		ranges = getRanges(L);
+	}
+	else  {
+		assert(false && "LUA function called with invalid number of parameters");
+	}
+
+	s_self->s2e()->getWarningsStream() << "Taking snapshot" << '\n';
+
+	s_self->takeSnapshot((S2EExecutionState*) g_s2e_state, name, flags, ranges);
 
 	return 0;
 }
@@ -148,37 +198,13 @@ void Snapshot::initialize()
 		m_connection = s2e()->getCorePlugin()->onTranslateBlockStart.connect(
 				sigc::mem_fun(*this, &Snapshot::slotTranslateBlockStart));
 	}
+
 	if (m_verbose) {
 		s2e()->getDebugStream() << "[Snapshot] initialized, saving snapshot in "
 				<< m_snapshotFolder << " "
 				<< (existed ? "(existed)" : "(created)") << '\n';
 	}
-
- //   m_traceBlockTranslation = s2e()->getConfig()->getBool(
- //                       getConfigKey() + ".traceBlockTranslation");
- //   m_traceBlockExecution = s2e()->getConfig()->getBool(
- //                       getConfigKey() + ".traceBlockExecution");
-
-//    s2e()->getCorePlugin()->onTranslateBlockStart.connect(
-//            sigc::mem_fun(*this, &Example::slotTranslateBlockStart));
 }
-
-//void Example::slotTranslateBlockStart(ExecutionSignal *signal,
-//                                      S2EExecutionState *state,
-//                                      TranslationBlock *tb,
-//                                      uint64_t pc)
-//{
-//    if(m_traceBlockTranslation)
-//        std::cout << "Translating block at " << std::hex << pc << std::dec << std::endl;
-//    if(m_traceBlockExecution)
-//        signal->connect(sigc::mem_fun(*this, &Example::slotExecuteBlockStart));
-//}
-//
-//void Example::slotExecuteBlockStart(S2EExecutionState *state, uint64_t pc)
-//{
-//    std::cout << "Executing block at " << std::hex << pc << std::dec << std::endl;
-//}
-
 
 void Snapshot::slotTranslateBlockStart(
             ExecutionSignal *signal,
@@ -194,7 +220,7 @@ void Snapshot::slotExecuteBlockStart(S2EExecutionState* state, uint64_t pc)
 {
 	m_connection.disconnect();
 	s2e()->getDebugStream() << "[Snapshot] DEBUG: Restoring snapshot from file " << m_restoreFile << '\n';
-	restoreSnapshot(m_restoreFile);
+	restoreSnapshot(m_restoreFile, state);
 }
 
 class QemuSnapshotError : public std::runtime_error
@@ -250,6 +276,89 @@ void Snapshot::saveCpu(QEMUFile* fh)
 	/* ID string */
 	qemu_put_string(fh, s2e_cpu_name);
 	cpu_save(fh, env);
+
+	uint32_t section_end = qemu_ftell(fh);
+	qemu_fseek(fh, section_start + 1, SEEK_SET);
+	//Write correct section size
+	qemu_put_be32(fh, section_end - section_start);
+	qemu_fseek(fh, section_end, SEEK_SET);
+}
+
+extern "C" int ram_save_live(QEMUFile*, int, void*);
+extern "C" MemoryRegion *get_system_memory(void);
+
+static bool inRanges(uint64_t val, const Snapshot::MemoryRangeList& ranges)
+{
+	for (Snapshot::MemoryRangeList::const_iterator itr = ranges.begin();
+		 itr != ranges.end();
+		 itr++)
+	{
+		if (val >= itr->first && val < itr->second)  {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void Snapshot::saveRam(QEMUFile* fh, S2EExecutionState* state, const MemoryRangeList& ranges)
+{
+	RAMBlock *block;
+	uint32_t section_start = qemu_ftell(fh);
+	qemu_put_byte(fh, S2E_SS_SECTION_START);
+	qemu_put_be32(fh, 0); //dummy length field
+	qemu_put_be32(fh, S2E_SS_SECTION_TYPE_RAM);
+	//Section ID string
+	qemu_put_string(fh, S2E_SS_SECTION_NAME_RAM);
+	qemu_put_be32(fh, 4); //Version (coherent with version specified in vl.c)
+	uint8_t* buf = new uint8_t[TARGET_PAGE_SIZE];
+	assert(buf);
+
+	QLIST_FOREACH(block, &ram_list.blocks, next)
+	{
+		uint64_t mem_base = block->offset;
+		uint64_t mem_size = memory_region_size(block->mr);
+		const char * mem_name = memory_region_name(block->mr);
+		uint64_t mem_end = mem_base + mem_size;
+		uint32_t mem_attrs = 0;
+
+		assert(mem_base % TARGET_PAGE_SIZE == 0);
+		assert(mem_end % TARGET_PAGE_SIZE == 0);
+		for (uint64_t mem_idx = mem_base; mem_idx < mem_end;)
+		{
+			for (; mem_idx < mem_end && !inRanges(mem_idx, ranges); mem_idx += TARGET_PAGE_SIZE)  {
+			}
+
+			if (mem_idx >= mem_end)  {
+				break;
+			}
+
+			uint64_t cur_size = 0;
+			for (cur_size = 0;
+				 mem_idx + cur_size < mem_end && inRanges(mem_idx + cur_size, ranges);
+				 cur_size += TARGET_PAGE_SIZE)  {
+
+			}
+
+			qemu_put_be64(fh, mem_idx);
+			qemu_put_be64(fh, cur_size);
+			qemu_put_be32(fh, mem_attrs);
+			qemu_put_string(fh, mem_name);
+
+			s2e()->getWarningsStream() << "[Snapshot] Dumping memory region "
+					<< hexval(mem_idx) << "-"
+					<< hexval(mem_idx + cur_size) << " (" << mem_name << ")" << '\n';
+
+			for (uint64_t i = mem_idx; i < mem_idx + cur_size; i += TARGET_PAGE_SIZE)
+			{
+				state->readMemoryConcrete(i, buf, TARGET_PAGE_SIZE, S2EExecutionState::PhysicalAddress);
+				qemu_put_buffer(fh, buf, TARGET_PAGE_SIZE);
+			}
+
+			mem_idx += cur_size;
+		}
+	}
+	delete[] buf;
 
 	uint32_t section_end = qemu_ftell(fh);
 	qemu_fseek(fh, section_start + 1, SEEK_SET);
@@ -331,9 +440,46 @@ void Snapshot::restoreCpu(QEMUFile* fh, uint32_t size)
 	}
 }
 
-void Snapshot::restoreSnapshot(std::string filename)
+void Snapshot::restoreRam(QEMUFile* fh, uint32_t size, S2EExecutionState* state)
+{
+	uint32_t version = qemu_get_be32(fh); size -= 4;
+
+	while (size > 0)
+	{
+		uint64_t mem_base = qemu_get_be64(fh); size -= 8;
+		uint64_t mem_size = qemu_get_be64(fh); size -= 8;
+		uint32_t mem_attrs = qemu_get_be32(fh); size -= 4;
+		uint64_t name_len = qemu_get_be16(fh); size -= 2;
+		char mem_name[name_len + 1];
+		qemu_get_buffer(fh, (unsigned char *) mem_name, name_len); size -= name_len;
+		mem_name[name_len] = 0;
+
+		s2e()->getDebugStream() << "[Snapshot] Restoring memory region " << hexval(mem_base) << "-" << hexval(mem_base + mem_size) << " (" << mem_name << ")" << '\n';
+
+		uint8_t* buf = new uint8_t[TARGET_PAGE_SIZE];
+		for (uint64_t idx = mem_base; idx < mem_base + mem_size; idx += TARGET_PAGE_SIZE)
+		{
+			qemu_get_buffer(fh, buf, TARGET_PAGE_SIZE); size -= TARGET_PAGE_SIZE;
+			s2e()->getWarningsStream() << "[Snapshot] Restoring memory " << hexval(idx) << "-" << hexval(idx + TARGET_PAGE_SIZE) << "\n";
+			state->writeMemoryConcrete(idx, buf, TARGET_PAGE_SIZE, S2EExecutionState::PhysicalAddress);
+		}
+	}
+
+	uint32_t pos_before = qemu_ftell(fh);
+	cpu_load(fh, env, version);
+	size -= (qemu_ftell(fh) - pos_before);
+
+	if (size != 0)  {
+		s2e()->getWarningsStream() << "Cpu section size: " << size << '\n';
+		throw std::runtime_error("Cpu section has wrong size");
+	}
+}
+
+void Snapshot::restoreSnapshot(std::string filename, S2EExecutionState* state)
 {
 	QEMUFile* fh = qemu_fopen(filename.c_str(), "rb");
+
+	assert(state);
 
 	//Check header
 	if (qemu_get_be32(fh) != S2E_SS_FILE_MAGIC)  {
@@ -370,15 +516,20 @@ void Snapshot::restoreSnapshot(std::string filename)
 		else if (section_id == S2E_SS_SECTION_TYPE_CPU && strcmp(section_name, S2E_SS_SECTION_NAME_CPU) == 0)  {
 			restoreCpu(fh, remaining_size);
 		}
+		else if (section_id == S2E_SS_SECTION_TYPE_RAM && strcmp(section_name, S2E_SS_SECTION_NAME_RAM) == 0)  {
+			restoreRam(fh, remaining_size, state);
+		}
 		else  {
+			s2e()->getWarningsStream() << "[Snapshot] Unkown section \"" << section_name << "\" [" << section_id << "]" << '\n';
 			throw std::runtime_error("Unknown section in snapshot file");
 		}
 	}
 
+	s2e()->getWarningsStream() << "Done" << '\n';
 	qemu_fclose(fh);
 }
 
-void Snapshot::takeSnapshot(S2EExecutionState* state, std::string name, unsigned flags)
+void Snapshot::takeSnapshot(S2EExecutionState* state, std::string name, unsigned flags, const MemoryRangeList& ranges)
 {
 	QEMUFile* fh;
 	std::string filename;
@@ -420,8 +571,15 @@ void Snapshot::takeSnapshot(S2EExecutionState* state, std::string name, unsigned
 	try
 	{
 		saveStart(fh);
-		saveMachine(fh);
-		saveCpu(fh);
+		if (flags & SNAPSHOT_MACHINE)  {
+			saveMachine(fh);
+		}
+		if (flags & SNAPSHOT_CPU)  {
+			saveCpu(fh);
+		}
+		if (flags & SNAPSHOT_MEMORY)  {
+			saveRam(fh, state, ranges);
+		}
 	}
 	catch (QemuSnapshotError& err)
 	{

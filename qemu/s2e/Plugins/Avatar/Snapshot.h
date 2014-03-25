@@ -44,6 +44,7 @@
 #include <s2e/S2EExecutionState.h>
 #include <s2e/ConfigFile.h>
 #include <string>
+#include <list>
 
 namespace s2e {
 namespace plugins {
@@ -51,7 +52,10 @@ namespace plugins {
 class Snapshot : public Plugin
 {
     S2E_PLUGIN
+
 public:
+    typedef std::pair< uint64_t, uint64_t > MemoryRange;
+    typedef std::list< MemoryRange > MemoryRangeList;
     enum SnapshotFlags
     {
     	SNAPSHOT_MACHINE = 0x1,
@@ -65,7 +69,11 @@ public:
     Snapshot(S2E* s2e);
 
     void initialize();
-    void takeSnapshot(S2EExecutionState* state, std::string name = "", unsigned flags = SNAPSHOT_CPU);
+    void takeSnapshot(
+    		S2EExecutionState* state,
+    		std::string name = "",
+    		unsigned flags = SNAPSHOT_CPU | SNAPSHOT_MACHINE | SNAPSHOT_MEMORY,
+    		const MemoryRangeList& ranges  = MemoryRangeList() );
 
 private:
     uint8_t getSystemEndianness();
@@ -73,9 +81,11 @@ private:
     void saveStart(QEMUFile* fh);
     void saveMachine(QEMUFile* fh);
     void saveCpu(QEMUFile* fh);
+    void saveRam(QEMUFile* fh, S2EExecutionState* state, const MemoryRangeList& ranges);
     void restoreMachine(QEMUFile* fh, uint32_t size);
     void restoreCpu(QEMUFile* fh, uint32_t size);
-    void restoreSnapshot(std::string filename);
+    void restoreRam(QEMUFile* fh, uint32_t size, S2EExecutionState* state);
+    void restoreSnapshot(std::string filename, S2EExecutionState* state);
 
     void slotTranslateBlockStart(
                 ExecutionSignal *signal,
@@ -92,6 +102,7 @@ private:
     static Snapshot* s_self;
     std::string m_restoreFile;
     sigc::connection m_connection;
+    static MemoryRangeList s_defaultSnapshotMemoryRanges;
 };
 
 } // namespace plugins
