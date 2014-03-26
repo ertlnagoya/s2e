@@ -103,6 +103,7 @@ private:
     std::string m_restoreFile;
     sigc::connection m_connection;
     static MemoryRangeList s_defaultSnapshotMemoryRanges;
+    MemoryRangeList m_restoreMemoryRanges;
 };
 
 } // namespace plugins

@@ -126,6 +126,8 @@ int Snapshot::luaTakeSnapshot(lua_State* L)  {
 	unsigned flags;
 	std::list< std::pair< uint64_t, uint64_t> > ranges;
 
+	s_self->s2e()->getWarningsStream() <<"LUA args: " << lua_gettop(L) << '\n';
+
 	if (lua_gettop(L) == 1)  {
 		name = lua_tointeger(L, lua_gettop(L) - 0);
 		//TODO: Update this default when more snapshot stuff is available
@@ -133,12 +135,12 @@ int Snapshot::luaTakeSnapshot(lua_State* L)  {
 		ranges = s_defaultSnapshotMemoryRanges;
 	}
 	else if (lua_gettop(L) == 2)  {
-		std::string name = lua_tostring(L, lua_gettop(L) - 1);
+		name = lua_tostring(L, lua_gettop(L) - 1);
 		flags = lua_tointeger(L, lua_gettop(L) - 0);
 		ranges = s_defaultSnapshotMemoryRanges;
 	}
 	else if (lua_gettop(L) == 3)  {
-		std::string name = lua_tostring(L, lua_gettop(L) - 2);
+		name = lua_tostring(L, lua_gettop(L) - 2);
 		flags = lua_tointeger(L, lua_gettop(L) - 1);
 		ranges = getRanges(L);
 	}
@@ -146,7 +148,24 @@ int Snapshot::luaTakeSnapshot(lua_State* L)  {
 		assert(false && "LUA function called with invalid number of parameters");
 	}
 
-	s_self->s2e()->getWarningsStream() << "Taking snapshot" << '\n';
+	std::stringstream ss;
+	ss << "[";
+	bool sep = false;
+	for (MemoryRangeList::const_iterator itr = ranges.begin();
+		 itr != ranges.end();
+		 itr++)
+	{
+		if (sep)  {
+			ss << ", ";
+		}
+		sep = true;
+		ss << "(0x" << hexval(itr->first) << ", 0x" << hexval(itr->second) << ")";
+	}
+	ss << "]";
+
+	s_self->s2e()->getWarningsStream() << "[Snapshot] calling take_snapshot(\""
+			<< name << "\", " << hexval(flags) << ", "
+			<< ss.str() << ")" << '\n';
 
 	s_self->takeSnapshot((S2EExecutionState*) g_s2e_state, name, flags, ranges);
 
@@ -192,7 +211,77 @@ void Snapshot::initialize()
 	lua_register_c_function(s2e()->getConfig()->getState(), "Snapshot", "takeSnapshot", &Snapshot::luaTakeSnapshot);
 
 	m_restoreFile = s2e()->getConfig()->getString(
-	                        getConfigKey() + ".restore", "");
+	                        getConfigKey() + ".restore_file", "");
+	bool ok;
+	ConfigFile::string_list keys = s2e()->getConfig()->getListKeys(getConfigKey() + ".snapshot_ranges", &ok);
+	if (!ok)  {
+		s2e()->getWarningsStream() << "[Snapshot] ERROR: reading config key "
+				<< getConfigKey() << ".snapshot_ranges" << '\n';
+	}
+	else  {
+		for (ConfigFile::string_list::const_iterator itr = keys.begin();
+			 itr != keys.end();
+			 itr++)
+		{
+			bool ok2;
+			uint64_t address = s2e()->getConfig()->getInt(getConfigKey() + "." + *itr + ".address", 0, &ok);
+			uint64_t size = s2e()->getConfig()->getInt(getConfigKey() + "." + *itr + ".size", 0, &ok2);
+
+			if (!ok)  {
+				s2e()->getWarningsStream() << "[Snapshot] ERROR: reading config key "
+						<< getConfigKey() << ".snapshot_ranges" << "."
+						<< *itr << ".address" << '\n';
+				break;
+			}
+			if (!ok2)  {
+				s2e()->getWarningsStream() << "[Snapshot] ERROR: reading config key "
+						<< getConfigKey() << ".snapshot_ranges" << "."
+						<< *itr << ".size" << '\n';
+				break;
+			}
+
+			s_defaultSnapshotMemoryRanges.push_back(std::make_pair(address, size));
+		}
+	}
+
+	ConfigFile::string_list keys2 = s2e()->getConfig()->getListKeys(getConfigKey() + ".restore_ranges", &ok);
+	if (!ok)  {
+		s2e()->getWarningsStream() << "[Snapshot] ERROR: reading config key "
+				<< getConfigKey() << ".restore_ranges" << '\n';
+	}
+	else  {
+		for (ConfigFile::string_list::const_iterator itr = keys2.begin();
+			 itr != keys2.end();
+			 itr++)
+		{
+			bool ok2;
+			uint64_t address = s2e()->getConfig()->getInt(getConfigKey() + "." + *itr + ".address", 0, &ok);
+			uint64_t size = s2e()->getConfig()->getInt(getConfigKey() + "." + *itr + ".size", 0, &ok2);
+
+			if (!ok)  {
+				s2e()->getWarningsStream() << "[Snapshot] ERROR: reading config key "
+						<< getConfigKey() << ".restore_ranges" << "."
+						<< *itr << ".address" << '\n';
+				break;
+			}
+			if (!ok2)  {
+				s2e()->getWarningsStream() << "[Snapshot] ERROR: reading config key "
+						<< getConfigKey() << ".restore_ranges" << "."
+						<< *itr << ".size" << '\n';
+				break;
+			}
+
+			m_restoreMemoryRanges.push_back(std::make_pair(address, size));
+		}
+	}
+
+	if (s_defaultSnapshotMemoryRanges.empty()) {
+		s_defaultSnapshotMemoryRanges.push_back(std::make_pair(0, 0xffffffffffffffffULL));
+	}
+
+	if (m_restoreMemoryRanges.empty()) {
+		m_restoreMemoryRanges.push_back(std::make_pair(0, 0xffffffffffffffffULL));
+	}
 
 	if (m_restoreFile != "")  {
 		m_connection = s2e()->getCorePlugin()->onTranslateBlockStart.connect(
@@ -409,10 +498,14 @@ void Snapshot::restoreMachine(QEMUFile* fh, uint32_t size)
 
 	if (getSystemEndianness() != endianness)  {
 		throw std::runtime_error("Current QEMU machine endianness does not match machine endianness from snapshot");
+
 	}
 
+	s2e()->getDebugStream() << "[Snapshot] restore machine " << name
+			<< (endianness == S2E_SS_ENDIAN_LITTLE ? "(little endian)" : "(big endian)") << '\n';
+
 	if (size != 0)  {
-		s2e()->getWarningsStream() << "Machine section size: " << size << '\n';
+		s2e()->getWarningsStream() << "[Snapshot] ERROR: Machine section remaining size: " << size << '\n';
 		throw std::runtime_error("Machine section has wrong size");
 	}
 }
@@ -427,6 +520,7 @@ void Snapshot::restoreCpu(QEMUFile* fh, uint32_t size)
 	model[model_len] = 0;
 
 	if (version != CPU_SAVE_VERSION || architecture != getSystemArchitecture())  {
+		s2e()->getWarningsStream() << "[Snapshot] ERROR: Wrong CPU section version, cannot read" << '\n';
 		throw std::runtime_error("Version or architecture of snapshot file wrong or not implemented");
 	}
 
@@ -434,8 +528,19 @@ void Snapshot::restoreCpu(QEMUFile* fh, uint32_t size)
 	cpu_load(fh, env, version);
 	size -= (qemu_ftell(fh) - pos_before);
 
+	const char * arch_name;
+	switch (architecture) {
+	case S2E_SS_ARCH_ARM: arch_name = "ARM"; break;
+	case S2E_SS_ARCH_I386: arch_name = "i386"; break;
+	case S2E_SS_ARCH_X86_64: arch_name = "x86_64"; break;
+	default: arch_name = "unknown"; break;
+	}
+
+	s2e()->getDebugStream() << "[Snapshot] Restore CPU "
+			<< arch_name << " " << model << '\n';
+
 	if (size != 0)  {
-		s2e()->getWarningsStream() << "Cpu section size: " << size << '\n';
+		s2e()->getWarningsStream() << "[Snapshot] ERROR: Cpu section remaining size: " << size << '\n';
 		throw std::runtime_error("Cpu section has wrong size");
 	}
 }
@@ -460,18 +565,18 @@ void Snapshot::restoreRam(QEMUFile* fh, uint32_t size, S2EExecutionState* state)
 		for (uint64_t idx = mem_base; idx < mem_base + mem_size; idx += TARGET_PAGE_SIZE)
 		{
 			qemu_get_buffer(fh, buf, TARGET_PAGE_SIZE); size -= TARGET_PAGE_SIZE;
-			s2e()->getWarningsStream() << "[Snapshot] Restoring memory " << hexval(idx) << "-" << hexval(idx + TARGET_PAGE_SIZE) << "\n";
-			state->writeMemoryConcrete(idx, buf, TARGET_PAGE_SIZE, S2EExecutionState::PhysicalAddress);
+
+			if (inRanges(idx, m_restoreMemoryRanges))
+			{
+				s2e()->getDebugStream() << "[Snapshot] Restoring memory " << hexval(idx) << "-" << hexval(idx + TARGET_PAGE_SIZE) << "\n";
+				state->writeMemoryConcrete(idx, buf, TARGET_PAGE_SIZE, S2EExecutionState::PhysicalAddress);
+			}
 		}
 	}
 
-	uint32_t pos_before = qemu_ftell(fh);
-	cpu_load(fh, env, version);
-	size -= (qemu_ftell(fh) - pos_before);
-
 	if (size != 0)  {
-		s2e()->getWarningsStream() << "Cpu section size: " << size << '\n';
-		throw std::runtime_error("Cpu section has wrong size");
+		s2e()->getWarningsStream() << "[Snapshot] ERROR: Memory section remaining size: " << size << '\n';
+		throw std::runtime_error("Memory section has wrong size");
 	}
 }
 
@@ -537,8 +642,16 @@ void Snapshot::takeSnapshot(S2EExecutionState* state, std::string name, unsigned
 
 	if (name == "")
 	{
-		llvm::sys::TimeValue llvm_time = llvm::sys::TimeValue::now();
-		name = "s2e-" + llvm_time.str();
+		time_t now = time(0);
+		struct tm tstruct;
+		char buf[80];
+		tstruct = *localtime(&now);
+
+		strftime(buf, sizeof(buf), "%Y-%m-%d_%H:%M:%S", &tstruct);
+
+		std::stringstream ss;
+		ss << "s2e-" << buf;
+		name = ss.str();
 	}
 
 	s2e()->getDebugStream() << "[Snapshot] DEBUG: Taking snapshot with name " << name << '\n';
@@ -560,7 +673,8 @@ void Snapshot::takeSnapshot(S2EExecutionState* state, std::string name, unsigned
 
 	assert(i < MAX_SNAPSHOT_FILES && "Too many snapshot files");
 
-	fh = qemu_fopen(snapshotFile.str().data(), "wb");
+	std::string snapshotFileName = snapshotFile.str();
+	fh = qemu_fopen(snapshotFileName.c_str(), "wb");
 	if (!fh) {
 		throw std::runtime_error("File could not be opened");
 	}
