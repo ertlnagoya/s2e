@@ -469,7 +469,7 @@ uint8_t Snapshot::getSystemEndianness()
 uint8_t Snapshot::getSystemArchitecture()
 {
 #ifdef TARGET_I386
-	return 2E_SS_ARCH_I386;
+	return S2E_SS_ARCH_I386;
 #elif defined(TARGET_X86_64)
 	return S2E_SS_ARCH_X86_64;
 #elif defined(TARGET_ARM)
