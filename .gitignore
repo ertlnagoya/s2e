@@ -6,3 +6,8 @@
 /guest/s2eget/s2eget
 cscope.*
 session.vim
+
+# Eclipse stuff
+.project
+.cproject
+.settings/
