@@ -368,6 +368,29 @@ namespace s2e
 					return symbolicValue;
 				}
 			}
+            case 4: //Concolic value
+            {
+            	std::string name;
+            	uint64_t value;
+
+            	lua_getfield(L, -1, "name");
+            	name = lua_tostring(L, -1);
+            	lua_getfield(L, -2, "value");
+            	value = lua_tointeger(L, -1);
+            	lua_pop(L, 4); //Pop two retrieved fields and two arguments
+
+            	std::vector<uint8_t> data;
+            	for (unsigned i = 0; i < size; i += 8)
+            	{
+#ifdef TARGET_WORDS_BIGENDIAN
+            		data.push_back((value >> (size - 8 - i)) & 0xff);
+#else
+            		data.push_back((value >> i) & 0xff);
+#endif
+            	}
+            	return state->createConcolicValue(name, size, data);
+            	break;
+            }
             default:
                 {
                     m_s2e->getWarningsStream()
