@@ -549,11 +549,13 @@ void Snapshot::restoreRam(QEMUFile* fh, uint32_t size, S2EExecutionState* state)
 {
 	uint32_t version = qemu_get_be32(fh); size -= 4;
 
+	assert(version == 4);
+
 	while (size > 0)
 	{
 		uint64_t mem_base = qemu_get_be64(fh); size -= 8;
 		uint64_t mem_size = qemu_get_be64(fh); size -= 8;
-		uint32_t mem_attrs = qemu_get_be32(fh); size -= 4;
+		/*uint32_t mem_attrs = */qemu_get_be32(fh); size -= 4;
 		uint64_t name_len = qemu_get_be16(fh); size -= 2;
 		char mem_name[name_len + 1];
 		qemu_get_buffer(fh, (unsigned char *) mem_name, name_len); size -= name_len;
