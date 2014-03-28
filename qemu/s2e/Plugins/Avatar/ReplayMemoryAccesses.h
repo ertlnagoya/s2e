@@ -26,6 +26,7 @@ class ReplayMemoryAccesses : public Plugin
 			std::string m_inputFileName;
 			bool m_verbose;
 			bool m_skipCode;
+			bool m_insertSymbol;
 			MemoryInterceptor* m_memoryInterceptor;
 
 			std::ifstream m_inputFile;
@@ -42,6 +43,13 @@ class ReplayMemoryAccesses : public Plugin
 
 			/* return true if setup succeeded */
 			bool setupRangeListeners();
+
+			void slotTranslateBlockStart(ExecutionSignal *signal,
+					S2EExecutionState *state,
+					TranslationBlock *tb,
+					uint64_t pc);
+			void slotExecuteBlockStart(S2EExecutionState *state,
+					uint64_t pc);
 	};
 
 class MemoryInterceptorReplayHandler : public MemoryAccessHandler

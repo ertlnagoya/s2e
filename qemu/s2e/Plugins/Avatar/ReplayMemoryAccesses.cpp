@@ -24,14 +24,28 @@ S2E_DEFINE_PLUGIN(ReplayMemoryAccesses,
 void ReplayMemoryAccesses::initialize()
 {
 	ConfigFile *cfg = s2e()->getConfig();
+	bool ok;
 
 	m_verbose = cfg->getBool(getConfigKey()+".verbose");
-	m_skipCode = cfg->getBool(getConfigKey()+".skipCode", true);
+	m_skipCode = cfg->getBool(getConfigKey()+".skipCode", false, &ok);
+	if (!ok)
+		m_skipCode = true;
 	m_inputFileName = cfg->getString(getConfigKey()+".replayTraceFileName");
 	m_memoryInterceptor =
 		static_cast<MemoryInterceptor *>(s2e()->getPlugin(
 					"MemoryInterceptor"));
 	assert(m_memoryInterceptor);
+
+	m_insertSymbol = cfg->getBool(getConfigKey()+".insertSymbol", false, &ok);
+	if (!ok)
+		m_insertSymbol = false;
+	if (m_insertSymbol) {
+		/* we need to change to symbolic mode at a begining of a basic
+		 * block
+		 */
+		s2e()->getCorePlugin()->onTranslateBlockStart.connect(
+				sigc::mem_fun(*this, &ReplayMemoryAccesses::slotTranslateBlockStart));
+	}
 
 	/* prepare input file */
 	m_inputFile.open(m_inputFileName.c_str(), std::ifstream::in | std::ifstream::binary);
@@ -50,6 +64,27 @@ void ReplayMemoryAccesses::initialize()
 	}
 
 	s2e()->getDebugStream() << "[ReplayMemoryAccesses]: initialized" << '\n';
+}
+
+void ReplayMemoryAccesses::slotTranslateBlockStart(ExecutionSignal *signal, 
+		S2EExecutionState *state,
+		TranslationBlock *tb,
+		uint64_t pc)
+{
+	signal->connect(sigc::mem_fun(*this,
+				&ReplayMemoryAccesses::slotExecuteBlockStart));
+}
+
+void ReplayMemoryAccesses::slotExecuteBlockStart(S2EExecutionState *state,
+		uint64_t pc)
+{
+	assert(pc == state->getTb()->pc);
+	if (state->isForkingEnabled())
+		state->disableForking();
+	if (state->isRunningConcrete()) {
+		state->jumpToSymbolicCpp();
+		/* TODO: deregister signals */
+	}
 }
 
 bool ReplayMemoryAccesses::setupRangeListeners()
@@ -259,6 +294,30 @@ klee::ref<klee::Expr> MemoryInterceptorReplayHandler::read(S2EExecutionState *st
 			hexval(address) << " to " << hexval(value) << '\n';
 	}
 
+	if (m_replayMemoryAccesses->m_insertSymbol) {
+		assert(!state->isRunningConcrete());
+		char name_buf[512];
+		snprintf(name_buf, sizeof name_buf,
+				"replay_symbolic_@0x%08lx", state->getPc());
+		std::string name(name_buf);
+
+		std::vector<unsigned char> buf;
+		std::stringstream ss;
+		for (unsigned i = 0; i < size; i += 8)  {
+			buf.push_back(((uint8_t *) &value)[i/8]);
+			ss << std::hex << static_cast<unsigned>(((uint8_t *) &value)[i / 8]) << " ";
+		}
+
+		if (m_replayMemoryAccesses->m_verbose)
+			m_s2e->getWarningsStream() << "[ReplayMemoryAccesses] createConcolicValue(" << name << ", " << width << ", [" << ss.str() << "])" << '\n';
+
+		klee::ref<klee::Expr> symb_var = state->createConcolicValue(name, width, buf);
+
+		m_s2e->getDebugStream()
+			<< "[ReplayMemoryAccesses] returning concolic value\n";
+		return symb_var;
+	}
+
 	klee::ref<klee::ConstantExpr> klee_value = klee::ConstantExpr::create(value, width);
 	return static_cast<klee::ref<klee::Expr> >(klee_value);
 }
@@ -267,12 +326,6 @@ bool ReplayMemoryAccesses::setValueFromNext(uint64_t address, bool isWrite,
 					unsigned size, /* size in bits */
 					uint64_t *valueRet)
 {
-	/*
-	if (!updateNextMemoryAccess()) {
-		s2e()->getDebugStream() << "[ReplayMemoryAccesses]: failed to get first entry" << '\n';
-		return false;
-	}
-	*/
 	int skipped = 0;
 
 	while (updateNextMemoryAccess()) {
