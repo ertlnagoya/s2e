@@ -71,6 +71,13 @@ void TestCaseGenerator::onTestCaseGeneration(S2EExecutionState *state, const std
             << '\n';
 
     ConcreteInputs out;
+
+#if 0
+    foreach2(it, state->constraints.begin(), state->constraints.end()) {
+        s2e()->getDebugStream() << "Constraint: " << *it << '\n';
+    }
+#endif
+
     bool success = s2e()->getExecutor()->getSymbolicSolution(*state, out);
 
     if (!success) {
@@ -78,11 +85,6 @@ void TestCaseGenerator::onTestCaseGeneration(S2EExecutionState *state, const std
         return;
     }
 
-#if 0
-    foreach2(it, state.constraints.begin(), state.constraints.end()) {
-        s2e()->getMessagesStream() << "Constraint: " << std::hex << *it << '\n';
-    }
-#endif
 
     s2e()->getMessagesStream() << '\n';
 
