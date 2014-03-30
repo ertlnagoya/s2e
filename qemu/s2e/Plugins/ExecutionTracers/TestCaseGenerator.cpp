@@ -38,6 +38,7 @@
 
 #include <s2e/S2E.h>
 #include <s2e/Utils.h>
+#include <s2e/ConfigFile.h>
 #include <s2e/S2EExecutionState.h>
 #include <s2e/S2EExecutor.h>
 #include "TestCaseGenerator.h"
@@ -58,6 +59,8 @@ TestCaseGenerator::TestCaseGenerator(S2E* s2e)
 
 void TestCaseGenerator::initialize()
 {
+	bool ok;
+	m_printConstraints = s2e()->getConfig()->getBool(getConfigKey() + ".print_constraints", false, &ok);
     s2e()->getCorePlugin()->onTestCaseGeneration.connect(
             sigc::mem_fun(*this, &TestCaseGenerator::onTestCaseGeneration));
 }
@@ -85,6 +88,12 @@ void TestCaseGenerator::onTestCaseGeneration(S2EExecutionState *state, const std
         return;
     }
 
+    if (m_printConstraints)
+    {
+		foreach2(it, state->constraints.begin(), state->constraints.end()) {
+			s2e()->getMessagesStream() << "Constraint: " << *it << '\n';
+		}
+    }
 
     s2e()->getMessagesStream() << '\n';
 

@@ -61,6 +61,7 @@ public:
 
 private:
     void onTestCaseGeneration(S2EExecutionState *state, const std::string &message);
+    bool m_printConstraints;
 };
 
 
