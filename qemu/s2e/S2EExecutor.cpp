@@ -1968,7 +1968,9 @@ uintptr_t S2EExecutor::executeTranslationBlock(
             //XXX: This should be fixed to make sure that helpers do not read/write corrupted data
             //because they think that execution is concrete while it should be symbolic (see issue #30).
             if (!m_forceConcretizations) {
-#if 1
+           //XXX: [J] The below code is default on x86, but does not work for ARM. I do not understand
+           //     why.
+#ifndef TARGET_ARM
             /* We can not execute TB natively if it reads any symbolic regs */
             uint64_t smask = state->getSymbolicRegistersMask();
             if(smask || (tb->helper_accesses_mem & 4)) {
