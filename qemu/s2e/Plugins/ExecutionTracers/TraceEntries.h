@@ -75,6 +75,7 @@ enum ExecTraceEntryType {
     TRACE_ICOUNT,
     TRACE_MEM_CHECKER,
     TRACE_INSTR_START,
+    TRACE_CONCOLIC_FORK_KILL,
     TRACE_MAX
 };
 
@@ -425,6 +426,13 @@ union ExecutionTraceAll {
     ExecutionTraceCall call;
     ExecutionTraceReturn ret;
 }__attribute__((packed));
+
+struct ExecutionTraceConcolicForkKill {
+	uint64_t pc;
+	uint64_t killed_state_id;
+	uint64_t condition_offset;
+	uint16_t condition_size;
+} __attribute__((__packed__));
 
 }
 }
