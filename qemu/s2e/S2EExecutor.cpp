@@ -1794,17 +1794,21 @@ static void s2e_enable_signals(sigset_t *oldset)
 
 #else
 
+#ifndef TARGET_ARM
 static void s2e_disable_signals(sigset_t *oldset)
 {
     sigset_t set;
     sigfillset(&set);
     sigprocmask(SIG_BLOCK, &set, oldset);
 }
+#endif
 
+#ifndef TARGET_ARM
 static void s2e_enable_signals(sigset_t *oldset)
 {
     sigprocmask(SIG_SETMASK, oldset, NULL);
 }
+#endif
 
 #endif
 
@@ -1914,6 +1918,7 @@ static inline void s2e_tb_reset_jump(TranslationBlock *tb, unsigned int n)
 }
 
 
+#ifndef TARGET_ARM
 //XXX: inline causes compiler internal errors
 static void s2e_tb_reset_jump_smask(TranslationBlock* tb, unsigned int n,
                                            uint64_t smask, int depth = 0)
@@ -1938,6 +1943,7 @@ static void s2e_tb_reset_jump_smask(TranslationBlock* tb, unsigned int n,
         s2e_enable_signals(&oldset);
     }
 }
+#endif
 
 uintptr_t S2EExecutor::executeTranslationBlock(
         S2EExecutionState* state,
