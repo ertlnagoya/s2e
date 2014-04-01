@@ -3726,7 +3726,7 @@ int main(int argc, char **argv, char **envp)
 
 #ifdef CONFIG_S2E
     s2e_machine_name = strdup(machine->name);
-    s2e_cpu_name = strdup(cpu_model);
+    s2e_cpu_name = strdup(cpu_model ? cpu_model : "");
 #endif /* CONFIG_S2E */
     qemu_add_globals();
 
