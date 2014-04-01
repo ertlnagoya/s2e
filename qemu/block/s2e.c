@@ -332,7 +332,7 @@ static void s2e_close(BlockDriverState *bs)
 {
     BDRVS2EState *s = bs->opaque;
 
-    printf("s2e-block: dirty sectors on close:%ld\n", s->dirty_count);
+    printf("s2e-block: dirty sectors on close:%" PRId64 "\n", s->dirty_count);
     for (int64_t i = 0; i < s->l1_entries; ++i) {
         g_free(s->l1[i]);
     }
@@ -485,7 +485,7 @@ static int s2e_snapshot_create(BlockDriverState *bs, QEMUSnapshotInfo *sn_info)
     header.sector_map_offset = 1;
     header.sector_map_entries = s->dirty_count;
 
-    printf("s2e-block: dirty at save: %ld\n", s->dirty_count);
+    printf("s2e-block: dirty at save: %" PRId64 "\n", s->dirty_count);
 
     unsigned sector_map_size = header.sector_map_entries * sizeof(uint32_t);
     header.sectors_start = 1 + sector_map_size / S2EB_SECTOR_SIZE;
@@ -669,7 +669,7 @@ static int s2e_snapshot_goto(BlockDriverState *bs, const char *snapshot_id)
         sector_data_ptr += S2EB_SECTOR_SIZE;
     }
 
-    printf("s2e-block: dirty after restore: %ld\n", s->dirty_count);
+    printf("s2e-block: dirty after restore: %" PRId64 "\n", s->dirty_count);
 
     s->snapshot_vmstate = vm_state;
     s->snapshot_vmstate_size = header.vmstate_size;

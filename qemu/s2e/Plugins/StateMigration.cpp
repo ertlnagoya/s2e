@@ -232,7 +232,7 @@ uint32_t StateMigration::putBreakPoint(S2EExecutionState *state, uint64_t addr)
 	const uint32_t brk_isn = 0xe1200472;
 	uint32_t ret;
 	ret = this->writeMemory32(state, addr, brk_isn);
-	printf("[StateMigration]: done inserting the breakpoint at 0x%08lx\n",
+	printf("[StateMigration]: done inserting the breakpoint at 0x%08" PRIx64 "\n",
 			addr);
 	return ret;
 }

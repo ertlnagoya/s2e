@@ -298,7 +298,7 @@ klee::ref<klee::Expr> MemoryInterceptorReplayHandler::read(S2EExecutionState *st
 		assert(!state->isRunningConcrete());
 		char name_buf[512];
 		snprintf(name_buf, sizeof name_buf,
-				"replay_symbolic_@0x%08lx", state->getPc());
+				"replay_symbolic_@0x%08" PRIx64, state->getPc());
 		std::string name(name_buf);
 
 		std::vector<unsigned char> buf;
