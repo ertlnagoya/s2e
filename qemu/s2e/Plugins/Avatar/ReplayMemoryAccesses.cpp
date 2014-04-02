@@ -351,14 +351,18 @@ bool ReplayMemoryAccesses::setValueFromNext(uint64_t address, bool isWrite,
 			if (m_nextToMatch->flags & EXECTRACE_MEM_WRITE) {
 				/* a write was requested */
 				*valueRet = m_nextToMatch->value;
-				s2e()->getDebugStream() << "[ReplayMemoryAccesses]: skip [W] " << skipped << '\n';
+				if (m_verbose)
+					s2e()->getDebugStream() << "[ReplayMemoryAccesses]: skip [W] "
+						<< skipped << '\n';
 				return true;
 			}
 		} else {
 			if (!(m_nextToMatch->flags & EXECTRACE_MEM_WRITE)) {
 				/* a read was requested */
 				*valueRet = m_nextToMatch->value;
-				s2e()->getDebugStream() << "[ReplayMemoryAccesses]: skip [R] " << skipped << '\n';
+				if (m_verbose)
+					s2e()->getDebugStream() << "[ReplayMemoryAccesses]: skip [R] "
+						<< skipped << '\n';
 				return true;
 			}
 		}
