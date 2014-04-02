@@ -42,7 +42,7 @@ class ReplayMemoryAccesses : public Plugin
 					uint64_t *valueRet);
 
 			/* return true if setup succeeded */
-			bool setupRangeListeners();
+			bool setupRangeListeners(bool *atLeastOneIsConcolic);
 
 			void slotTranslateBlockStart(ExecutionSignal *signal,
 					S2EExecutionState *state,
@@ -60,6 +60,12 @@ class MemoryInterceptorReplayHandler : public MemoryAccessHandler
 					uint64_t address,
 					uint64_t size,
 					int mask);
+			MemoryInterceptorReplayHandler(
+					S2E* s2e,
+					uint64_t address,
+					uint64_t size,
+					int mask,
+					bool replayConcolic);
 
 			virtual klee::ref<klee::Expr> read(S2EExecutionState *state,
 					klee::ref<klee::Expr> virtaddr,
@@ -75,6 +81,8 @@ class MemoryInterceptorReplayHandler : public MemoryAccessHandler
 			S2E* m_s2e;
 			ReplayMemoryAccesses *m_replayMemoryAccesses;
 			virtual ~MemoryInterceptorReplayHandler() {}
+
+			bool m_replayConcolic;
 	};
 
 }

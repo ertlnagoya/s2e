@@ -36,17 +36,6 @@ void ReplayMemoryAccesses::initialize()
 					"MemoryInterceptor"));
 	assert(m_memoryInterceptor);
 
-	m_insertSymbol = cfg->getBool(getConfigKey()+".insertSymbol", false, &ok);
-	if (!ok)
-		m_insertSymbol = false;
-	if (m_insertSymbol) {
-		/* we need to change to symbolic mode at a begining of a basic
-		 * block
-		 */
-		s2e()->getCorePlugin()->onTranslateBlockStart.connect(
-				sigc::mem_fun(*this, &ReplayMemoryAccesses::slotTranslateBlockStart));
-	}
-
 	/* prepare input file */
 	m_inputFile.open(m_inputFileName.c_str(), std::ifstream::in | std::ifstream::binary);
 	if (!m_inputFile.good()) {
@@ -59,8 +48,15 @@ void ReplayMemoryAccesses::initialize()
 	m_stateId = 0;
 
 	/* parse memory ranges */
-	if (!setupRangeListeners()) {
+	if (!setupRangeListeners(&m_insertSymbol)) {
 		assert(0 && "Failed to setup range listeners");
+	}
+	if (m_insertSymbol) {
+		/* we need to change to symbolic mode at a begining of a basic
+		 * block
+		 */
+		s2e()->getCorePlugin()->onTranslateBlockStart.connect(
+				sigc::mem_fun(*this, &ReplayMemoryAccesses::slotTranslateBlockStart));
 	}
 
 	s2e()->getDebugStream() << "[ReplayMemoryAccesses]: initialized" << '\n';
@@ -87,7 +83,7 @@ void ReplayMemoryAccesses::slotExecuteBlockStart(S2EExecutionState *state,
 	}
 }
 
-bool ReplayMemoryAccesses::setupRangeListeners()
+bool ReplayMemoryAccesses::setupRangeListeners(bool *atLeastOneIsConcolic)
 {
 	ConfigFile *cfg = s2e()->getConfig();
 	bool ok;
@@ -203,8 +199,15 @@ bool ReplayMemoryAccesses::setupRangeListeners()
 			<< hexval(address + size) << " with access type "
 			<< hexval(access_type) << "\n";
 
+		bool replayConcolic =
+			cfg->getBool(interceptor_key + ".replayConcolic", false, &ok);
+		if (!ok)
+			replayConcolic = false;
+		if (replayConcolic) {
+			*atLeastOneIsConcolic = true;
+		}
 		m_memoryInterceptor->addInterceptor(
-				new MemoryInterceptorReplayHandler(m_s2e, address, size, access_type));
+				new MemoryInterceptorReplayHandler(m_s2e, address, size, access_type, replayConcolic));
 	}
 
 	return true;
@@ -214,6 +217,14 @@ MemoryInterceptorReplayHandler::MemoryInterceptorReplayHandler(
 	S2E* s2e, uint64_t address, uint64_t size, int mask)
 		: MemoryAccessHandler(s2e, address, size, mask)
 {
+	MemoryInterceptorReplayHandler(s2e, address, size, mask, false);
+}
+
+MemoryInterceptorReplayHandler::MemoryInterceptorReplayHandler(
+	S2E* s2e, uint64_t address, uint64_t size, int mask, bool replayConcolic)
+		: MemoryAccessHandler(s2e, address, size, mask)
+{
+	m_replayConcolic = replayConcolic;
 	m_replayMemoryAccesses = static_cast<ReplayMemoryAccesses *>(s2e->getPlugin(
 				"ReplayMemoryAccesses"));
 	assert(m_replayMemoryAccesses);
@@ -294,7 +305,7 @@ klee::ref<klee::Expr> MemoryInterceptorReplayHandler::read(S2EExecutionState *st
 			hexval(address) << " to " << hexval(value) << '\n';
 	}
 
-	if (m_replayMemoryAccesses->m_insertSymbol) {
+	if (this->m_replayConcolic) {
 		assert(!state->isRunningConcrete());
 		char name_buf[512];
 		snprintf(name_buf, sizeof name_buf,
