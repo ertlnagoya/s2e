@@ -447,10 +447,17 @@ bool ReplayMemoryAccesses::updateNextMemoryAccess()
 	while (!m_inputFile.eof()) {
 		m_inputFile.read((char *)&mLastHdr, sizeof mLastHdr);
 		if (m_inputFile.gcount() != sizeof mLastHdr) {
+			if (m_verbose) {
+				m_s2e->getDebugStream() << "incomplete read\n";
+			}
 			return false;
 		}
 
 		if (mLastHdr.type >= TRACE_MAX) {
+			if (m_verbose) {
+				m_s2e->getDebugStream() << "invalid type: 0x"
+					<< hexval(mLastHdr.type) << "\n";
+			}
 			return false;
 		}
 
@@ -463,6 +470,10 @@ bool ReplayMemoryAccesses::updateNextMemoryAccess()
 			return true;
 		} else {
 			/* we should read the uninteresting stuff in a scrap buffer */
+			if (mLastHdr.size > sizeof scrap_buffer) {
+				m_s2e->getDebugStream() << "invalid size" <<
+					mLastHdr.size << " type: " << mLastHdr.type << '\n';
+			}
 			assert(mLastHdr.size <= sizeof scrap_buffer);
 			m_inputFile.read((char *) scrap_buffer, mLastHdr.size);
 		}
