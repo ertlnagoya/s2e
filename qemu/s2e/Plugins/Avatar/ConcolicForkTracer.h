@@ -54,6 +54,7 @@ class ConcolicForkTracer : public Plugin
     S2E_PLUGIN
 public:
     ConcolicForkTracer(S2E* s2e): Plugin(s2e) {}
+    virtual ~ConcolicForkTracer();
 
     void initialize();
 
@@ -67,7 +68,7 @@ private:
                        const std::vector<klee::ref<klee::Expr> >& newConditions);
 //    bool m_traceBlockTranslation;
 //    bool m_traceBlockExecution;
-    std::ofstream m_logFile;
+    std::ostream* m_logFile;
 };
 
 } // namespace plugins

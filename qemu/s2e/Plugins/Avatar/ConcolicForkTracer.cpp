@@ -47,6 +47,10 @@
 #include <iostream>
 #include <vector>
 
+#if defined(CONFIG_ZLIB)
+#include <s2e/gzstream/gzstream.h>
+#endif /* defined(CONFIG_ZLIB) */
+
 namespace s2e {
 namespace plugins {
 
@@ -55,8 +59,36 @@ S2E_DEFINE_PLUGIN(ConcolicForkTracer, "Trace symbolic state forks based on conco
 void ConcolicForkTracer::initialize()
 {
     s2e()->getCorePlugin()->onStateFork.connect(sigc::mem_fun(*this, &ConcolicForkTracer::slotStateFork));
-    std::string outFileName = s2e()->getOutputFilename("ConcolicForkTrace.dat");
-    m_logFile.open(outFileName.c_str(), std::ios::out | std::ios::binary);
+
+	bool ok;
+	std::string compression = s2e()->getConfig()->getString(getConfigKey() + ".compression", "none", &ok);
+
+	if (compression == "gzip")
+	{
+#if defined(CONFIG_ZLIB)
+		std::string filename = s2e()->getOutputFilename("ConcolicForkTrace.dat.gz");
+		s2e()->getDebugStream() << "[ExecutionTracer] Using gzip compression for log file \""
+						<< filename << "\"" << '\n';
+		m_logFile = new ogzstream(filename.c_str(), std::ios::binary | std::ios::out);
+#else /* defined(CONFIG_ZLIB) */
+		s2e()->getWarningsStream() << "[ExecutionTracer] S2E has been compiled without zlib suppport, but "
+				<< "gzip compression for the trace file was requested. Terminating." << '\n';
+		exit(1);
+#endif /* defined(CONFIG_ZLIB) */
+	}
+	else
+	{
+		std::string filename = s2e()->getOutputFilename("ConcolicForkTrace.dat");
+		s2e()->getDebugStream() << "[ExecutionTracer] Not using compression for log file \""
+				<< filename << "\"" << '\n';
+		m_logFile = new std::ofstream(filename.c_str(), std::ios::binary | std::ios::out);
+	}
+
+
+    if (!m_logFile) {
+        s2e()->getWarningsStream() << "Could not create ExecutionTracer.dat" << '\n';
+        exit(-1);
+    }
 }
 
 class ConcolicForkTraceEntry
@@ -77,6 +109,7 @@ public:
 	const std::string& getCondition() const {return m_condition;}
 };
 void operator<<(std::ostream& stream, const ConcolicForkTraceEntry& entry);
+
 void operator<<(std::ostream& stream, const ConcolicForkTraceEntry& entry)
 {
 	uint32_t size;
@@ -111,13 +144,13 @@ void ConcolicForkTracer::slotStateFork(S2EExecutionState* originalState,
 			ss << **cond_itr;
 			ss.flush();
 
-			uint64_t entry_offset = m_logFile.tellp();
+			uint64_t entry_offset = m_logFile->tellp();
 
 			ConcolicForkTraceEntry ourTraceEntry(
 					(*state_itr)->getPc(),
 					(*state_itr)->getID(),
 					serialized_condition);
-			m_logFile << ourTraceEntry;
+			(*m_logFile) << ourTraceEntry;
 
 			ExecutionTracer* execution_tracer = static_cast<ExecutionTracer *>(s2e()->getPlugin("ExecutionTracer"));
 			if (execution_tracer)
@@ -141,6 +174,14 @@ void ConcolicForkTracer::slotStateFork(S2EExecutionState* originalState,
 			//TODO: Check if state fork was due to concolic value
 			s2e()->getExecutor()->terminateStateEarly(**state_itr, "Killed concolic state fork");
 		}
+	}
+}
+
+ConcolicForkTracer::~ConcolicForkTracer() {
+	if (m_logFile) {
+		s2e()->getWarningsStream() << "[ConcolicForkTracer] destructor called" << '\n';
+		delete m_logFile;
+		m_logFile = 0;
 	}
 }
 
