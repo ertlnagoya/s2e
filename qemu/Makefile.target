@@ -565,6 +565,10 @@ ifeq ($(TARGET_BASE_ARCH), arm)
 	s2eobj-y += $(s2eobj-arm-y)
 endif
 
+ifeq ($(CONFIG_ZLIB), y)
+	s2eobj-y += s2e/gzstream/gzstream.o
+endif 
+
 -include $(S2E_PLUGIN_DIR)/Makefile.target
 
 vl.o: QEMU_CFLAGS+=-Wno-array-bounds

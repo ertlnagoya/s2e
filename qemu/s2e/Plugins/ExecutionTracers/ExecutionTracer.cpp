@@ -39,6 +39,10 @@
 #include <s2e/ConfigFile.h>
 #include <s2e/Utils.h>
 
+#if defined(CONFIG_ZLIB)
+#include <s2e/gzstream/gzstream.h>
+#endif /* defined(CONFIG_ZLIB) */
+
 #include <llvm/Support/TimeValue.h>
 
 #include <iostream>
@@ -67,19 +71,48 @@ void ExecutionTracer::initialize()
 ExecutionTracer::~ExecutionTracer()
 {
     if (m_LogFile) {
-        fclose(m_LogFile);
+    	//RAII flushes and closes file
+    	delete m_LogFile;
+    	m_LogFile = 0;
     }
 }
 
 void ExecutionTracer::createNewTraceFile(bool append)
 {
+	std::string flags;
+	bool ok;
+	std::string compression = s2e()->getConfig()->getString(getConfigKey() + ".compression", "none", &ok);
 
     if (append) {
         assert(m_fileName.size() > 0);
-        m_LogFile = fopen(m_fileName.c_str(), "a");
-    }else {
-        m_fileName = s2e()->getOutputFilename("ExecutionTracer.dat");
-        m_LogFile = fopen(m_fileName.c_str(), "wb");
+        if (compression != "none") {
+        	s2e()->getDebugStream() << "[ExecutionTracer] Warning: Specified compression "
+        			<< compression << " but appending to a file. Ignoring compression." << '\n';
+        }
+
+        m_LogFile = new std::ofstream(m_fileName.c_str(), std::ios::app | std::ios::binary);
+    }
+    else {
+    	if (compression == "gzip")
+    	{
+#if defined(CONFIG_ZLIB)
+    		std::string filename = s2e()->getOutputFilename("ExecutionTracer.dat.gz");
+    		s2e()->getDebugStream() << "[ExecutionTracer] Using gzip compression for log file \""
+    						<< filename << "\"" << '\n';
+    		m_LogFile = new ogzstream(filename.c_str(), std::ios::binary | std::ios::out);
+#else /* defined(CONFIG_ZLIB) */
+    		s2e()->getWarningsStream() << "[ExecutionTracer] S2E has been compiled without zlib suppport, but "
+    				<< "gzip compression for the trace file was requested. Terminating." << '\n';
+    		exit(1);
+#endif /* defined(CONFIG_ZLIB) */
+    	}
+    	else
+    	{
+    		std::string filename = s2e()->getOutputFilename("ExecutionTracer.dat");
+    		s2e()->getDebugStream() << "[ExecutionTracer] Not using compression for log file \""
+    				<< filename << "\"" << '\n';
+    		m_LogFile = new std::ofstream(filename.c_str(), std::ios::binary | std::ios::out);
+    	}
     }
 
     if (!m_LogFile) {
@@ -92,7 +125,7 @@ void ExecutionTracer::createNewTraceFile(bool append)
 void ExecutionTracer::onTimer()
 {
     if (m_LogFile) {
-        fflush(m_LogFile);
+    	m_LogFile->flush();
     }
 }
 
@@ -110,15 +143,15 @@ uint32_t ExecutionTracer::writeData(
     item.stateId = state->getID();
     item.pid = state->getPid();
 
-    if (fwrite(&item, sizeof(item), 1, m_LogFile) != 1) {
-        return 0;
+    m_LogFile->write(reinterpret_cast<const char *>(&item), sizeof(item));
+    if (m_LogFile->fail())  {
+    	return 0;
     }
 
     if (size) {
-        if (fwrite(data, size, 1, m_LogFile) != 1) {
-            //at this point the log is corrupted.
-			//printf("cannot write log?\n");
-            //assert(false);
+    	m_LogFile->write(reinterpret_cast<const char *>(data), size);
+    	if (m_LogFile->fail()) {
+    		s2e()->getWarningsStream() << "[ExecutionTracer] Error: trace file is probably corrupted" << '\n';
         }
     }
 
@@ -128,14 +161,15 @@ uint32_t ExecutionTracer::writeData(
 void ExecutionTracer::flush()
 {
     if (m_LogFile) {
-        fflush(m_LogFile);
+    	m_LogFile->flush();
     }
 }
 
 void ExecutionTracer::onProcessFork(bool preFork, bool isChild, unsigned parentProcId)
 {
     if (preFork) {
-        fclose(m_LogFile);
+    	assert(m_LogFile);
+    	delete m_LogFile;
         m_LogFile = NULL;
     }else {
         if (isChild) {

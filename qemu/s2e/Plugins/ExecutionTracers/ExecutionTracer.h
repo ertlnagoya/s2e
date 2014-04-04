@@ -62,7 +62,7 @@ class ExecutionTracer : public Plugin
     S2E_PLUGIN
 
     std::string m_fileName;
-    FILE* m_LogFile;
+    std::ostream* m_LogFile;
     uint32_t m_CurrentIndex;
     OSMonitor *m_Monitor;
     ExecTracerModules m_Modules;

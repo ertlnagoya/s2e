@@ -3927,6 +3927,7 @@ if test "$target_s2e" = "yes"; then
   S2E_DIRS="$S2E_DIRS s2e/Plugins/DataSelectors s2e/Plugins/ExecutionTracers"
   S2E_DIRS="$S2E_DIRS s2e/Plugins/WindowsApi s2e/Plugins/Searchers"
   S2E_DIRS="$S2E_DIRS s2e/Plugins/PythonInterface s2e/Plugins/Avatar"
+  S2E_DIRS="$S2E_DIRS s2e/gzstream"
   for dir in $S2E_DIRS ; do
     mkdir -p $target_dir/$dir
   done
@@ -4191,6 +4192,10 @@ if test "$target_s2e" = "yes" ; then
   if test "$boost" = "yes"; then
       echo "LIBS+=-lboost_serialization" >> $config_target_mak
   fi
+fi
+
+if [ "$zlib" = "yes" ]; then
+  echo "CONFIG_ZLIB=y" >> $config_target_mak
 fi
 
 if [ "$llvm" = "yes" ]; then
