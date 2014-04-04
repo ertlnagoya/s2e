@@ -47,15 +47,15 @@
 
 static off_t get_file_size(const char * path)
 {
-	struct stat64 stat;
+	struct stat stats;
 
-	if (stat64(path, &stat))
+	if (stat(path, &stats))
 	{
 		printf("ERROR: Getting file size for file %s\n", path);
 		return 0;
 	}
 
-	return stat.st_size;
+	return stats.st_size;
 }
 
 static QDict * load_configuration(const char * filename)
