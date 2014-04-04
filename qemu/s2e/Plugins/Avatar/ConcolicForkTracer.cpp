@@ -132,6 +132,9 @@ void ConcolicForkTracer::slotStateFork(S2EExecutionState* originalState,
 	//print new states
 	std::vector<S2EExecutionState*>::const_iterator state_itr = newStates.begin();
 	std::vector< klee::ref< klee::Expr > >::const_iterator cond_itr = newConditions.begin();
+	/* TODO: check some verbose flag */
+	s2e()->getDebugStream()
+		<< "[ConcolicForkTracer] forking" << "\n";
 	for (;state_itr != newStates.end() && cond_itr != newConditions.end(); state_itr++, cond_itr++)
 	{
 		if ((*state_itr)->getID() != originalState->getID())
