@@ -321,7 +321,11 @@ klee::ref<klee::Expr> MemoryInterceptorReplayHandler::read(S2EExecutionState *st
 		}
 
 		if (m_replayMemoryAccesses->m_verbose)
-			m_s2e->getWarningsStream() << "[ReplayMemoryAccesses] createConcolicValue(" << name << ", " << width << ", [" << ss.str() << "])" << '\n';
+			m_s2e->getWarningsStream() <<
+				"[ReplayMemoryAccesses] createConcolicValue(ts="
+				<< m_replayMemoryAccesses->mLastHdr.timeStamp << ", "
+				<< name << ", " << width << ", [" << ss.str() << "])"
+				<< '\n';
 
 		klee::ref<klee::Expr> symb_var = state->createConcolicValue(name, width, buf);
 
