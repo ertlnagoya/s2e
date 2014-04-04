@@ -75,10 +75,11 @@ void ReplayMemoryAccesses::slotExecuteBlockStart(S2EExecutionState *state,
 		uint64_t pc)
 {
 	assert(pc == state->getTb()->pc);
-	if (state->isForkingEnabled())
-		state->disableForking();
 	if (state->isRunningConcrete()) {
 		state->jumpToSymbolicCpp();
+		s2e()->getWarningsStream()
+			<< "[ReplayMemoryAccesses] Switch to symbolic mode"
+			<< '\n';
 		/* TODO: deregister signals */
 	}
 }
