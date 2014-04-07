@@ -11,6 +11,10 @@
 
 #include <iostream>
 
+#if defined(CONFIG_ZLIB)
+#include <s2e/gzstream/gzstream.h>
+#endif /* defined(CONFIG_ZLIB) */
+
 #include "../ExecutionTracers/TraceEntries.h"
 #include "../MemoryInterceptor.h"
 
@@ -37,11 +41,25 @@ void ReplayMemoryAccesses::initialize()
 	assert(m_memoryInterceptor);
 
 	/* prepare input file */
-	m_inputFile.open(m_inputFileName.c_str(), std::ifstream::in | std::ifstream::binary);
-	if (!m_inputFile.good()) {
+	if (m_inputFileName.size() >= 3 &&
+			m_inputFileName.compare(m_inputFileName.size()-3, 3, ".gz") == 0) {
+		/* a *.gz file was passed */
+#if defined(CONFIG_ZLIB)
+		m_inputFile = new igzstream(m_inputFileName.c_str(), std::ios::binary | std::ios::in);
+		s2e()->getDebugStream() << "[ReplayMemoryAccesses]: using compressed trace" << '\n';
+#else
+		assert(0 && "CONFIG_ZLIB not enabled, trying to replay compressed trace");
+#endif /* defined(CONFIG_ZLIB) */
+	} else {
+		/* not compressed */
+		m_inputFile = new std::ifstream(m_inputFileName.c_str(), std::ios::in | std::ios::binary);
+	}
+
+	assert(m_inputFile);
+	if (!m_inputFile->good()) {
 		std::cerr << m_inputFileName << ' ' << "err: " << std::strerror(errno) << '\n';
 	}
-	assert(m_inputFile.good());
+	assert(m_inputFile->good());
 
 	/* allocate initial state */
 	m_nextToMatch = new ExecutionTraceMemory;
@@ -374,7 +392,7 @@ bool ReplayMemoryAccesses::setValueFromNext(uint64_t address, bool isWrite,
 		++skipped;
 	}
 
-	assert(!m_inputFile.eof());
+	assert(!m_inputFile->eof());
 	return false;
 }
 
@@ -444,9 +462,9 @@ bool ReplayMemoryAccesses::updateNextMemoryAccess()
 	assert(m_nextToMatch);
 	static char scrap_buffer[512];
 
-	while (!m_inputFile.eof()) {
-		m_inputFile.read((char *)&mLastHdr, sizeof mLastHdr);
-		if (m_inputFile.gcount() != sizeof mLastHdr) {
+	while (!m_inputFile->eof()) {
+		m_inputFile->read((char *)&mLastHdr, sizeof mLastHdr);
+		if (m_inputFile->gcount() != sizeof mLastHdr) {
 			if (m_verbose) {
 				m_s2e->getDebugStream() << "incomplete read\n";
 			}
@@ -464,8 +482,8 @@ bool ReplayMemoryAccesses::updateNextMemoryAccess()
 		if (mLastHdr.stateId == m_stateId &&
 				mLastHdr.type == TRACE_MEMORY) {
 			assert(sizeof *m_nextToMatch == mLastHdr.size);
-			m_inputFile.read((char *) m_nextToMatch, sizeof *m_nextToMatch);
-			if (m_inputFile.gcount() != sizeof *m_nextToMatch)
+			m_inputFile->read((char *) m_nextToMatch, sizeof *m_nextToMatch);
+			if (m_inputFile->gcount() != sizeof *m_nextToMatch)
 				return false;
 			return true;
 		} else {
@@ -475,7 +493,7 @@ bool ReplayMemoryAccesses::updateNextMemoryAccess()
 					mLastHdr.size << " type: " << mLastHdr.type << '\n';
 			}
 			assert(mLastHdr.size <= sizeof scrap_buffer);
-			m_inputFile.read((char *) scrap_buffer, mLastHdr.size);
+			m_inputFile->read((char *) scrap_buffer, mLastHdr.size);
 		}
 	}
 

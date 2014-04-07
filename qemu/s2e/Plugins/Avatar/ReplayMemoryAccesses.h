@@ -29,7 +29,7 @@ class ReplayMemoryAccesses : public Plugin
 			bool m_insertSymbol;
 			MemoryInterceptor* m_memoryInterceptor;
 
-			std::ifstream m_inputFile;
+			std::istream *m_inputFile;
 			bool updateNextMemoryAccess();
 
 			int m_stateId;
