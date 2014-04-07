@@ -37,6 +37,7 @@
 #include <s2e/S2E.h>
 #include <s2e/ConfigFile.h>
 #include <s2e/Utils.h>
+#include <s2e/S2EExecutor.h>
 
 #include <iostream>
 
@@ -321,6 +322,14 @@ namespace s2e
 
             lua_call(L, 6, 2);
 
+            if (luaAnnotation.m_doKill) {
+				std::stringstream ss;
+				ss << "[MemoryInterceptorAnnotation] Annotation " << m_readHandler << " killed us";
+				m_s2e->getExecutor()->terminateStateEarly(*state, ss.str());
+				lua_pop(L, 2);
+				return klee::ref<klee::Expr>();
+			}
+
             int resulttype = lua_tonumber(L, lua_gettop(L) - 1);
 
             switch (resulttype)
@@ -473,6 +482,13 @@ namespace s2e
 
             bool hijack = lua_toboolean(L, lua_gettop(L));
             lua_pop(L, 1);
+
+            if (luaAnnotation.m_doKill) {
+				std::stringstream ss;
+				ss << "[MemoryInterceptorAnnotation] Annotation " << m_writeHandler << " killed us";
+				m_s2e->getExecutor()->terminateStateEarly(*state, ss.str());
+				return false;
+			}
 
             return hijack;
         }
