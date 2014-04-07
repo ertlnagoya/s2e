@@ -207,7 +207,7 @@ void * RemoteMemoryInterface::receiveThread(void * opaque)
         std::string token;
             
         getline(*rmi->m_socket, token, '\n');
-        
+
         if (token.size() == 0 && !rmi->m_socket->isConnected())
         {
             //TODO: do something to gracefully shutdown qemu (i,.e. unblock main thread, return dummy value, shutdown vm)
@@ -215,7 +215,6 @@ void * RemoteMemoryInterface::receiveThread(void * opaque)
             break;
         }
         
-//        rmi->m_s2e->getMessagesStream() << "[RemoteMemory] received json: '" << token << "'" << '\n'; 
         
         rmi->parse(token);
     }
@@ -341,7 +340,10 @@ bool RemoteMemoryInterface::waitForAnswer(S2EExecutionState *state,
 {
 	qemu_mutex_lock(&m_mutex);
 	m_state = state;
-	qemu_cond_wait(&m_responseCond, &m_mutex);
+
+	while (m_responseQueue.empty())  {
+		qemu_cond_wait(&m_responseCond, &m_mutex);
+	}
 
 	response = m_responseQueue.front();
 	m_responseQueue.pop();
@@ -447,13 +449,15 @@ bool RemoteMemoryInterface::submitAndWait(S2EExecutionState *state,
 	json::Writer::Write(request, *m_socket);
 	m_socket->flush();
 
-	qemu_cond_wait(&m_responseCond, &m_mutex);
 
 	/* TODO: test if this is our request reply.
 	 * Right now, the hidden assumption is that each submited request
 	 * that requires an aswer is submited via this function i.e. we're
 	 * *always* popping the reply
 	 */
+	while (m_responseQueue.empty())  {
+		qemu_cond_wait(&m_responseCond, &m_mutex);
+	}
 	response = m_responseQueue.front();
 	m_responseQueue.pop();
 	m_state = NULL;
