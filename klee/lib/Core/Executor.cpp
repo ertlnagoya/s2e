@@ -83,6 +83,15 @@
 using namespace llvm;
 using namespace klee;
 
+namespace s2e {
+    void s2e_symbolic_write_to_concrete_memory(const klee::MemoryObject* mo, klee::ref< klee::Expr > offset, klee::ref< klee::Expr > value);
+    
+    __attribute__((__weak__)) void s2e_symbolic_write_to_concrete_memory(const MemoryObject* mo, klee::ref< klee::Expr > offset, klee::ref< klee::Expr > value)
+    {
+
+    }
+}
+
 namespace {
   cl::opt<bool>
   DumpStatesOnHalt("dump-states-on-halt",
@@ -3300,6 +3309,7 @@ void Executor::resolveExact(ExecutionState &state,
   }
 }
 
+
 void Executor::executeMemoryOperation(ExecutionState &state,
                                       bool isWrite,
                                       ref<Expr> address,
@@ -3405,6 +3415,16 @@ void Executor::executeMemoryOperation(ExecutionState &state,
                       offset = toConstantSilent(state, offset);
                       value  = toConstantSilent(state,  value);
                   } else {
+                      s2e::s2e_symbolic_write_to_concrete_memory(mo, offset, value);
+//                      llvm::Function* func = kmodule->module->getFunction("klee_symbolic_write_to_concrete_memory");
+//                      if (func)
+//                      {
+//                	      std::vector< ref< Expr > > args;
+//                	      args.push_back(ConstantExpr::createPointer(reinterpret_cast<uint64_t>(mo)));
+//                	      args.push_back(offset);
+//                	      args.push_back(value);
+//                	      callExternalFunction(state, target, func, args);
+//                      }
                       std::stringstream ss;
                       ss << "write to always concrete memory name:" << mo->name <<
                               " offset=" << offset << " value=" << value;

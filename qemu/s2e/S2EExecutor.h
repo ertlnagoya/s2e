@@ -233,6 +233,10 @@ public:
     }
 
 protected:
+    static void handleSymbolicWriteToConcreteMemory(Executor* executor,
+                                         klee::ExecutionState* state,
+                                         klee::KInstruction* target,
+                                         std::vector< klee::ref < klee::Expr > > &args);
     static void handlerTraceMemoryAccess(klee::Executor* executor,
                                     klee::ExecutionState* state,
                                     klee::KInstruction* target,

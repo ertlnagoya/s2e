@@ -142,6 +142,10 @@ extern "C" {
     //void* g_s2e_exec_ret_addr = 0;
 }
 
+namespace s2e {
+    void s2e_symbolic_write_to_concrete_memory(const klee::MemoryObject* mo, klee::ref< klee::Expr > offset, klee::ref< klee::Expr > value);
+}
+
 namespace {
     uint64_t hash64(uint64_t val, uint64_t initial = 14695981039346656037ULL) {
         const char* __first = (const char*) &val;
@@ -416,6 +420,15 @@ void S2EHandler::processTestCase(const klee::ExecutionState &state,
 {
     //XXX: This stuff is not used anymore
     //Use onTestCaseGeneration event instead.
+}
+
+void S2EExecutor::handleSymbolicWriteToConcreteMemory(Executor* executor,
+                                     klee::ExecutionState* state,
+                                     klee::KInstruction* target,
+                                     std::vector< klee::ref < klee::Expr > > &args)
+{
+    g_s2e->getWarningsStream() << "Balbalbalba" << '\n';
+
 }
 
 void S2EExecutor::handlerTraceMemoryAccess(Executor* executor,
@@ -707,6 +720,14 @@ void S2EExecutor::handleGetValue(klee::Executor* executor,
     std::vector<ref<Expr> > result;
     s2eState->kleeReadMemory(kleeAddress, sizeInBytes, NULL, false, true, add_constraint);
 }
+void s2e_symbolic_write_to_concrete_memory(const klee::MemoryObject* mo, klee::ref< klee::Expr > offset, klee::ref< klee::Expr > value)
+{
+    if (mo->name == "CpuSystemState" && isa<klee::ConstantExpr>(offset) && cast<klee::ConstantExpr>(offset)->getZExtValue() == 0)
+    {
+        g_s2e->getWarningsStream() << "Hahaha, I was called" << '\n';
+    }
+
+}
 
 S2EExecutor::S2EExecutor(S2E* s2e, TCGLLVMContext *tcgLLVMContext,
                     const InterpreterOptions &opts,
@@ -844,6 +865,7 @@ S2EExecutor::S2EExecutor(S2E* s2e, TCGLLVMContext *tcgLLVMContext,
     __DEFINE_EXT_FUNCTION(ldq_phys)
     __DEFINE_EXT_FUNCTION(stq_phys)
 
+//    __DEFINE_EXT_FUNCTION(klee_symbolic_write_to_concrete_memory)
 #if 0
     //Implementing these functions prevents special function handler
     //from being called...
@@ -964,6 +986,10 @@ S2EExecutor::S2EExecutor(S2E* s2e, TCGLLVMContext *tcgLLVMContext,
         assert(function);
         addSpecialFunctionHandler(function, handleGetValue);
 
+//        FunctionType *handleSymbolicWriteTy = FunctionType::get(llvm::Type::getVoidTy(M->getContext()), false);
+//        function = dynamic_cast<Function*>(kmodule->module->getOrInsertFunction("klee_symbolic_write_to_concrete_memory", handleSymbolicWriteTy));
+//        assert(function);
+//        addSpecialFunctionHandler(function, handleSymbolicWriteToConcreteMemory);
 
         FunctionType *traceInstTy = FunctionType::get(llvm::Type::getVoidTy(M->getContext()), false);
         function = dynamic_cast<Function*>(kmodule->module->getOrInsertFunction("tcg_llvm_trace_instruction", traceInstTy));
