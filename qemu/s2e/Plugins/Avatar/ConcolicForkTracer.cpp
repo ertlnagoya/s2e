@@ -191,7 +191,6 @@ void ConcolicForkTracer::slotStateFork(S2EExecutionState* originalState,
 
 ConcolicForkTracer::~ConcolicForkTracer() {
 	if (m_logFile) {
-		s2e()->getWarningsStream() << "[ConcolicForkTracer] destructor called" << '\n';
 		delete m_logFile;
 		m_logFile = 0;
 	}

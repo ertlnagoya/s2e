@@ -361,6 +361,7 @@ bool ReplayMemoryAccesses::setValueFromNext(uint64_t address, bool isWrite,
 					uint64_t *valueRet)
 {
 	int skipped = 0;
+	assert(!m_inputFile->eof());
 
 	while (updateNextMemoryAccess()) {
 		if (m_nextToMatch->address != address)
@@ -392,7 +393,6 @@ bool ReplayMemoryAccesses::setValueFromNext(uint64_t address, bool isWrite,
 		++skipped;
 	}
 
-	assert(!m_inputFile->eof());
 	return false;
 }
 
