@@ -2286,7 +2286,7 @@ fi
 
 PYTHONLIBS_LIST="-lpython3 -lpython3.2 -lpython3.3 -lpython3.4"
 
-if test "$s2e" != "no" && test "$s2e_python" == "yes"; then
+if test "$s2e" != "no" -a "$s2e_python" = "yes"; then
   #First test for header files
   cat > $TMPCXX << EOF
 extern "C" {
@@ -3177,7 +3177,7 @@ fi
 # After here, no more $cc or $ld runs
 
 #if test "$s2e_python" == "yes" && test "$pythonlib" = "yes" && test "$boost_pythonlib" = "yes"; then
-if test "$s2e_python" == "yes" && test "$pythonlib" = "yes"; then
+if test "$s2e_python" = "yes" -a "$pythonlib" = "yes"; then
   s2e_python=yes
 else
   s2e_python=no
