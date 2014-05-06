@@ -56,6 +56,26 @@ namespace plugins {
 
 S2E_DEFINE_PLUGIN(ConcolicForkTracer, "Trace symbolic state forks based on concolic values", "ConcolicForkTracer",);
 
+ConcolicForkTracerState::ConcolicForkTracerState() 
+    : m_doomed(false)
+{
+}
+
+ConcolicForkTracerState::~ConcolicForkTracerState()
+{
+}
+
+ConcolicForkTracerState* ConcolicForkTracerState::clone() const
+{
+    return new ConcolicForkTracerState(*this);
+}
+
+PluginState* ConcolicForkTracerState::factory(Plugin* p, S2EExecutionState* s)
+{
+    return new ConcolicForkTracerState();
+}
+
+
 void ConcolicForkTracer::initialize()
 {
     s2e()->getCorePlugin()->onStateFork.connect(sigc::mem_fun(*this, &ConcolicForkTracer::slotStateFork));
@@ -66,6 +86,7 @@ void ConcolicForkTracer::initialize()
 		m_killStateAfterFork = true;
 
 	std::string compression = s2e()->getConfig()->getString(getConfigKey() + ".compression", "none", &ok);
+	m_killOnFork = s2e()->getConfig()->getBool(getConfigKey() + ".killOnFork", false, &ok);
 
 	if (compression == "gzip")
 	{
@@ -92,6 +113,30 @@ void ConcolicForkTracer::initialize()
     if (!m_logFile) {
         s2e()->getWarningsStream() << "Could not create ExecutionTracer.dat" << '\n';
         exit(-1);
+    }
+
+    if (!m_killOnFork)
+    {
+        s2e()->getCorePlugin()->onTranslateInstructionStart.connect(sigc::mem_fun(*this, &ConcolicForkTracer::slotTranslateInstructionStart));
+    }
+}
+
+
+void ConcolicForkTracer::slotTranslateInstructionStart(ExecutionSignal *signal,
+                                      S2EExecutionState *state,
+                                      TranslationBlock *tb,
+                                      uint64_t pc)
+{
+    signal->connect(sigc::mem_fun(*this, &ConcolicForkTracer::slotExecuteInstructionStart));
+}
+
+void ConcolicForkTracer::slotExecuteInstructionStart(S2EExecutionState* state, uint64_t pc)
+{
+    DECLARE_PLUGINSTATE(ConcolicForkTracerState, state);
+
+    if (plgState->m_doomed)
+    {
+        s2e()->getExecutor()->terminateStateEarly(*state, "Killed concolic state fork on first instruction translation");
     }
 }
 
@@ -183,8 +228,16 @@ void ConcolicForkTracer::slotStateFork(S2EExecutionState* originalState,
 						<< "not logging concolic state kill" << '\n';
 			}
 
-			//TODO: Check if state fork was due to concolic value
-			s2e()->getExecutor()->terminateStateEarly(**state_itr, "Killed concolic state fork");
+            if (m_killOnFork)
+            {
+			    //TODO: Check if state fork was due to concolic value
+			    s2e()->getExecutor()->terminateStateEarly(**state_itr, "Killed concolic state fork");
+            }
+            else
+            {
+                DECLARE_PLUGINSTATE(ConcolicForkTracerState, *state_itr);
+                plgState->m_doomed = true;
+            }
 		}
 	}
 }

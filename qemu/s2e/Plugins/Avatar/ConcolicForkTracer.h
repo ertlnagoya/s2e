@@ -49,6 +49,19 @@
 namespace s2e {
 namespace plugins {
 
+class ConcolicForkTracerState : public PluginState
+{
+private:
+    ConcolicForkTracerState();
+public:
+    virtual ~ConcolicForkTracerState();
+    virtual ConcolicForkTracerState* clone() const;
+    static PluginState* factory(Plugin* p, S2EExecutionState* s);
+
+    bool m_doomed;
+    int m_doomedCounter;
+};
+
 class ConcolicForkTracer : public Plugin
 {
     S2E_PLUGIN
@@ -66,11 +79,20 @@ private:
     void slotStateFork(S2EExecutionState* originalState,
     		           const std::vector<S2EExecutionState*>& newStates,
                        const std::vector<klee::ref<klee::Expr> >& newConditions);
+
+    void slotTranslateInstructionStart(ExecutionSignal *signal,
+                                      S2EExecutionState *state,
+                                      TranslationBlock *tb,
+                                      uint64_t pc);
+    void slotExecuteInstructionStart(S2EExecutionState* state, uint64_t pc);
 //    bool m_traceBlockTranslation;
 //    bool m_traceBlockExecution;
     std::ostream* m_logFile;
-	bool m_killStateAfterFork; /* default true */
+    bool m_killStateAfterFork; /* default true */
+    bool m_killOnFork;
 };
+
+
 
 } // namespace plugins
 } // namespace s2e
