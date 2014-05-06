@@ -403,6 +403,66 @@ static int vfp_gdb_set_reg(CPUARMState *env, uint8_t *buf, int reg)
     return 0;
 }
 
+static int banked_gdb_get_reg(CPUARMState *env, uint8_t *buf, int reg)
+{
+	if (reg < 0) {
+		return 0;
+	}
+
+	if (reg <= 4) {
+		*(uint32_t *) buf = RR_cpu(env, usr_regs[reg]);
+		return 4;
+	}
+	else if (reg >= 5 && reg <= 9) {
+		*(uint32_t *) buf = RR_cpu(env, fiq_regs[reg - 5]);
+		return 4;
+	}
+	else if (reg >= 10 && reg <= 15) {
+		*(uint32_t *) buf = RR_cpu(env, banked_r13[reg - 10]);
+	    return 4;
+	}
+	else if (reg >= 16 && reg <= 21) {
+		*(uint32_t *) buf = RR_cpu(env, banked_r14[reg - 16]);
+	    return 4;
+	}
+	else if (reg >= 22 && reg <= 27) {
+		*(uint32_t *) buf = RR_cpu(env, banked_spsr[reg - 22]);
+	    return 4;
+	}
+
+	return 0;
+}
+
+static int banked_gdb_set_reg(CPUARMState *env, uint8_t *buf, int reg)
+{
+	if (reg < 0) {
+		return 0;
+	}
+
+	if (reg <= 4) {
+		WR_cpu(env, usr_regs[reg], *(uint32_t *) buf);
+		return 4;
+	}
+	else if (reg >= 5 && reg <= 9) {
+		WR_cpu(env, fiq_regs[reg - 5], *(uint32_t *) buf);
+		return 4;
+	}
+	else if (reg >= 10 && reg <= 15) {
+		WR_cpu(env, banked_r13[reg - 10], *(uint32_t *) buf);
+	    return 4;
+	}
+	else if (reg >= 16 && reg <= 21) {
+		WR_cpu(env, banked_r14[reg - 16], *(uint32_t *) buf);
+	    return 4;
+	}
+	else if (reg >= 22 && reg <= 27) {
+		WR_cpu(env, banked_spsr[reg - 22], *(uint32_t *) buf);
+	    return 4;
+	}
+
+	return 0;
+}
+
 CPUARMState *cpu_arm_init(const char *cpu_model)
 {
     ARMCPU *cpu;
@@ -424,6 +484,8 @@ CPUARMState *cpu_arm_init(const char *cpu_model)
     env->cpu_model_str = cpu_model;
     env->cp15.c0_cpuid = id;
     cpu_state_reset(env);
+    gdb_register_coprocessor(env, banked_gdb_get_reg, banked_gdb_set_reg,
+    		21, "arm-banked.xml", 0);
     if (arm_feature(env, ARM_FEATURE_NEON)) {
         gdb_register_coprocessor(env, vfp_gdb_get_reg, vfp_gdb_set_reg,
                                  51, "arm-neon.xml", 0);
