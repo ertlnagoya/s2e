@@ -556,7 +556,7 @@ s2eobj-y += s2e/Plugins/Avatar/RemoteControl.o
 s2eobj-y += s2e/Plugins/Avatar/Snapshot.o
 s2eobj-y += s2e/Plugins/Avatar/ConcolicForkTracer.o
 s2eobj-y += s2e/Plugins/Avatar/CheckMemoryAccesses.o
-
+s2eobj-y += s2e/Plugins/Avatar/LuaMonitorCommand.o
 
 ifeq ($(TARGET_BASE_ARCH), i386)
 	s2eobj-y += $(s2eobj-i386-y) $(s2eobj-win-y)
