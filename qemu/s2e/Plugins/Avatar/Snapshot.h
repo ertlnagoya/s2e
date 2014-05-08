@@ -104,6 +104,7 @@ private:
     sigc::connection m_connection;
     static MemoryRangeList s_defaultSnapshotMemoryRanges;
     MemoryRangeList m_restoreMemoryRanges;
+    bool m_canTakeSnapshot;
 };
 
 } // namespace plugins

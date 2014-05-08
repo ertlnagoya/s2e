@@ -99,6 +99,13 @@ S2E_DEFINE_PLUGIN(Snapshot, "Snapshot taking and reverting from S2E", "Snapshot"
 Snapshot* Snapshot::s_self = NULL;
 Snapshot::MemoryRangeList Snapshot::s_defaultSnapshotMemoryRanges;
 
+class CpuEnvironmentNotInitializedException : public std::runtime_error
+{
+public:
+	CpuEnvironmentNotInitializedException()
+		: runtime_error("Cannot take snapshot, CPU environment is not initialized. Execute one instruction before calling takeSnapshot.") {}
+};
+
 static Snapshot::MemoryRangeList getRanges(lua_State* L)
 {
 	Snapshot::MemoryRangeList ranges;
@@ -168,12 +175,16 @@ int Snapshot::luaTakeSnapshot(lua_State* L)  {
 				<< ss.str() << ")" << '\n';
 	}
 
-	s_self->takeSnapshot((S2EExecutionState*) g_s2e_state, name, flags, ranges);
-
+	try {
+		s_self->takeSnapshot((S2EExecutionState*) g_s2e_state, name, flags, ranges);
+	}
+	catch (std::runtime_error& err) {
+		luaL_error(L, "%s", err.what());
+	}
 	return 0;
 }
 
-Snapshot::Snapshot(S2E* s2e) : Plugin(s2e), m_verbose(false)
+Snapshot::Snapshot(S2E* s2e) : Plugin(s2e), m_verbose(false), m_canTakeSnapshot(false)
 {
 	s_self = this;
 }
@@ -284,10 +295,8 @@ void Snapshot::initialize()
 		m_restoreMemoryRanges.push_back(std::make_pair(0, 0xffffffffffffffffULL));
 	}
 
-	if (m_restoreFile != "")  {
-		m_connection = s2e()->getCorePlugin()->onTranslateBlockStart.connect(
-				sigc::mem_fun(*this, &Snapshot::slotTranslateBlockStart));
-	}
+	m_connection = s2e()->getCorePlugin()->onTranslateBlockStart.connect(
+			sigc::mem_fun(*this, &Snapshot::slotTranslateBlockStart));
 
 	if (m_verbose) {
 		s2e()->getDebugStream() << "[Snapshot] initialized, saving snapshot in "
@@ -309,8 +318,16 @@ void Snapshot::slotTranslateBlockStart(
 void Snapshot::slotExecuteBlockStart(S2EExecutionState* state, uint64_t pc)
 {
 	m_connection.disconnect();
-	s2e()->getDebugStream() << "[Snapshot] DEBUG: Restoring snapshot from file " << m_restoreFile << '\n';
-	restoreSnapshot(m_restoreFile, state);
+
+	if (m_restoreFile != "") {
+		if (m_verbose) {
+			s2e()->getDebugStream() << "[Snapshot] Restoring snapshot from file '"
+					<< m_restoreFile << "'" << '\n';
+		}
+		restoreSnapshot(m_restoreFile, state);
+	}
+
+	m_canTakeSnapshot = true;
 }
 
 class QemuSnapshotError : public std::runtime_error
@@ -642,6 +659,10 @@ void Snapshot::takeSnapshot(S2EExecutionState* state, std::string name, unsigned
 	QEMUFile* fh;
 	std::string filename;
 	unsigned i;
+
+	if (!m_canTakeSnapshot) {
+		throw CpuEnvironmentNotInitializedException();
+	}
 
 	if (name == "")
 	{
