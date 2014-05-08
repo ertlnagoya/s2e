@@ -212,6 +212,7 @@ void * RemoteMemoryInterface::receiveThread(void * opaque)
         {
             //TODO: do something to gracefully shutdown qemu (i,.e. unblock main thread, return dummy value, shutdown vm)
             rmi->m_s2e->getWarningsStream() << "[RemoteMemory] Remote end disconnected, machine is dead" << '\n';
+            ::exit(1);
             break;
         }
         
