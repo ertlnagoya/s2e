@@ -126,8 +126,6 @@ int Snapshot::luaTakeSnapshot(lua_State* L)  {
 	unsigned flags;
 	std::list< std::pair< uint64_t, uint64_t> > ranges;
 
-	s_self->s2e()->getWarningsStream() <<"LUA args: " << lua_gettop(L) << '\n';
-
 	if (lua_gettop(L) == 1)  {
 		name = lua_tointeger(L, lua_gettop(L) - 0);
 		//TODO: Update this default when more snapshot stuff is available
@@ -145,27 +143,30 @@ int Snapshot::luaTakeSnapshot(lua_State* L)  {
 		ranges = getRanges(L);
 	}
 	else  {
-		assert(false && "LUA function called with invalid number of parameters");
+		luaL_error(L, "Snapshot.takeSnapshot called with invalid number of parameters (%d)", lua_gettop(L));
 	}
 
-	std::stringstream ss;
-	ss << "[";
-	bool sep = false;
-	for (MemoryRangeList::const_iterator itr = ranges.begin();
-		 itr != ranges.end();
-		 itr++)
+	if (s_self->m_verbose)
 	{
-		if (sep)  {
-			ss << ", ";
+		std::stringstream ss;
+		ss << "[";
+		bool sep = false;
+		for (MemoryRangeList::const_iterator itr = ranges.begin();
+			 itr != ranges.end();
+			 itr++)
+		{
+			if (sep)  {
+				ss << ", ";
+			}
+			sep = true;
+			ss << "(0x" << hexval(itr->first) << ", 0x" << hexval(itr->second) << ")";
 		}
-		sep = true;
-		ss << "(0x" << hexval(itr->first) << ", 0x" << hexval(itr->second) << ")";
-	}
-	ss << "]";
+		ss << "]";
 
-	s_self->s2e()->getWarningsStream() << "[Snapshot] calling take_snapshot(\""
-			<< name << "\", " << hexval(flags) << ", "
-			<< ss.str() << ")" << '\n';
+		s_self->s2e()->getDebugStream() << "[Snapshot] calling take_snapshot(\""
+				<< name << "\", " << hexval(flags) << ", "
+				<< ss.str() << ")" << '\n';
+	}
 
 	s_self->takeSnapshot((S2EExecutionState*) g_s2e_state, name, flags, ranges);
 
