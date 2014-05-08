@@ -61,6 +61,10 @@ void ConcolicForkTracer::initialize()
     s2e()->getCorePlugin()->onStateFork.connect(sigc::mem_fun(*this, &ConcolicForkTracer::slotStateFork));
 
 	bool ok;
+	m_killStateAfterFork = s2e()->getConfig()->getBool(getConfigKey() + ".killStateAfterFork", true, &ok);
+	if (!ok)
+		m_killStateAfterFork = true;
+
 	std::string compression = s2e()->getConfig()->getString(getConfigKey() + ".compression", "none", &ok);
 
 	if (compression == "gzip")
@@ -135,6 +139,11 @@ void ConcolicForkTracer::slotStateFork(S2EExecutionState* originalState,
 	/* TODO: check some verbose flag */
 	s2e()->getDebugStream()
 		<< "[ConcolicForkTracer] forking" << "\n";
+	if (!m_killStateAfterFork) {
+		s2e()->getDebugStream()
+			<< "[ConcolicForkTracer] not killing, enabled by config" << "\n";
+		return;
+	}
 	for (;state_itr != newStates.end() && cond_itr != newConditions.end(); state_itr++, cond_itr++)
 	{
 		if ((*state_itr)->getID() != originalState->getID())

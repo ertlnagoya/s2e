@@ -69,6 +69,7 @@ private:
 //    bool m_traceBlockTranslation;
 //    bool m_traceBlockExecution;
     std::ostream* m_logFile;
+	bool m_killStateAfterFork; /* default true */
 };
 
 } // namespace plugins
