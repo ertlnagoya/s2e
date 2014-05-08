@@ -49,9 +49,9 @@ class QEMUMonitorProtocol:
         return socket.socket(family, socket.SOCK_STREAM)
 
     def __negotiate_capabilities(self):
-        self.__sockfile = self.__sock.makefile()
+        self.__sockfile = self.__sock.makefile(encoding = 'iso-8859-1')
         greeting = self.__json_read()
-        if greeting is None or not greeting.has_key('QMP'):
+        if greeting is None or not 'QMP' in greeting:
             raise QMPConnectError
         # Greeting seems ok, negotiate capabilities
         resp = self.cmd('qmp_capabilities')
@@ -106,8 +106,8 @@ class QEMUMonitorProtocol:
                 been closed
         """
         try:
-            self.__sock.sendall(json.dumps(qmp_cmd))
-        except socket.error, err:
+            self.__sock.sendall(json.dumps(qmp_cmd).encode(encoding = 'iso-8859-1'))
+        except socket.error as err:
             if err[0] == errno.EPIPE:
                 return
             raise socket.error(err)
@@ -130,7 +130,7 @@ class QEMUMonitorProtocol:
 
     def command(self, cmd, **kwds):
         ret = self.cmd(cmd, kwds)
-        if ret.has_key('error'):
+        if 'error' in ret:
             raise Exception(ret['error']['desc'])
         return ret['return']
 
@@ -143,7 +143,7 @@ class QEMUMonitorProtocol:
         self.__sock.setblocking(0)
         try:
             self.__json_read()
-        except socket.error, err:
+        except socket.error as err:
             if err[0] == errno.EAGAIN:
                 # No data available
                 pass
