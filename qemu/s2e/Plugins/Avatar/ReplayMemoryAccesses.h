@@ -14,6 +14,20 @@
 namespace s2e {
 namespace plugins {
 
+
+class ReplayMemoryAccessesState : public PluginState
+{
+    friend class ReplayMemoryAccesses;
+    friend class MemoryInterceptorReplayHandler;
+private:
+    ReplayMemoryAccessesState() : m_forked(false) {}
+    bool m_forked;
+public:
+    ReplayMemoryAccessesState* clone() const {return new ReplayMemoryAccessesState(*this);}
+    static PluginState* factory(Plugin* p, S2EExecutionState* s) {return new ReplayMemoryAccessesState();}
+
+};
+
 class ReplayMemoryAccesses : public Plugin
 	{
 		S2E_PLUGIN
@@ -27,6 +41,7 @@ class ReplayMemoryAccesses : public Plugin
 			bool m_verbose;
 			bool m_skipCode;
 			bool m_insertSymbol;
+            bool m_returnSymbolicAfterFork;
 			MemoryInterceptor* m_memoryInterceptor;
 
 			std::istream *m_inputFile;
@@ -49,7 +64,11 @@ class ReplayMemoryAccesses : public Plugin
 					TranslationBlock *tb,
 					uint64_t pc);
 			void slotExecuteBlockStart(S2EExecutionState *state,
-					uint64_t pc);
+				 	uint64_t pc);
+
+            void slotStateFork(S2EExecutionState* originalState,
+                    const std::vector<S2EExecutionState*>& newStates,
+                    const std::vector<klee::ref<klee::Expr> >& newConditions);
 	};
 
 class MemoryInterceptorReplayHandler : public MemoryAccessHandler

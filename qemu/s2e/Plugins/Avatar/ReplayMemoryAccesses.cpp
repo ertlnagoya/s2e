@@ -35,6 +35,7 @@ void ReplayMemoryAccesses::initialize()
 	if (!ok)
 		m_skipCode = true;
 	m_inputFileName = cfg->getString(getConfigKey()+".replayTraceFileName");
+    m_returnSymbolicAfterFork = cfg->getBool(getConfigKey() + ".returnSymbolicAfterFork", false, &ok);
 	m_memoryInterceptor =
 		static_cast<MemoryInterceptor *>(s2e()->getPlugin(
 					"MemoryInterceptor"));
@@ -76,6 +77,10 @@ void ReplayMemoryAccesses::initialize()
 		s2e()->getCorePlugin()->onTranslateBlockStart.connect(
 				sigc::mem_fun(*this, &ReplayMemoryAccesses::slotTranslateBlockStart));
 	}
+
+    if (m_returnSymbolicAfterFork)  {
+       s2e()->getCorePlugin()->onStateFork.connect(sigc::mem_fun(*this, &ReplayMemoryAccesses::slotStateFork));
+    }
 
 	s2e()->getDebugStream() << "[ReplayMemoryAccesses]: initialized" << '\n';
 }
@@ -262,6 +267,20 @@ klee::ref<klee::Expr> MemoryInterceptorReplayHandler::read(S2EExecutionState *st
 	klee::Expr::Width width;
 	uint64_t value = 0;
 
+    if (m_replayMemoryAccesses->m_returnSymbolicAfterFork)  {
+        ReplayMemoryAccessesState* plgState = static_cast<ReplayMemoryAccessesState *>(
+            m_replayMemoryAccesses->getPluginState(state, &ReplayMemoryAccessesState::factory));
+
+        if (plgState->m_forked)  {
+            std::stringstream ss;
+
+            ss << "replay_0x" << std::hex << state->getPc()
+               << "_0x" << cast<klee::ConstantExpr>(virtaddr)->getZExtValue() ;
+            return state->createSymbolicValue(ss.str(), size);
+        }
+    }
+
+
 	if (m_replayMemoryAccesses->m_skipCode && is_code)
 		return klee::ref<klee::Expr>();
 
@@ -340,9 +359,11 @@ klee::ref<klee::Expr> MemoryInterceptorReplayHandler::read(S2EExecutionState *st
 
 		if (m_replayMemoryAccesses->m_verbose)
 			m_s2e->getWarningsStream() <<
-				"[ReplayMemoryAccesses] createConcolicValue(ts="
-				<< m_replayMemoryAccesses->mLastHdr.timeStamp << ", "
-				<< name << ", " << width << ", [" << ss.str() << "])"
+				"[ReplayMemoryAccesses] Replaying concolic value " << hexval(value)
+				<< "[" << width << "]" << " at pc " << state->getPc() << ", IO address "
+                << hexval(cast<klee::ConstantExpr>(virtaddr)->getZExtValue()) 
+               // m_replayMemoryAccesses->mLastHdr.timeStamp << ", "
+			//	<< name << ", " << width << ", [" << ss.str() << "])"
 				<< '\n';
 
 		klee::ref<klee::Expr> symb_var = state->createConcolicValue(name, width, buf);
@@ -351,6 +372,13 @@ klee::ref<klee::Expr> MemoryInterceptorReplayHandler::read(S2EExecutionState *st
 			<< "[ReplayMemoryAccesses] returning concolic value\n";
 		return symb_var;
 	}
+
+    if (m_replayMemoryAccesses->m_verbose)  {
+        m_s2e->getWarningsStream() << "[ReplayMemoryAccesses] Replaying constant value " << hexval(value) 
+            << "[" << width << "]" << " at pc " <<  state->getPc() << ", IO address " 
+            << hexval(cast<klee::ConstantExpr>(virtaddr)->getZExtValue()) << '\n';
+    }
+
 
 	klee::ref<klee::ConstantExpr> klee_value = klee::ConstantExpr::create(value, width);
 	return static_cast<klee::ref<klee::Expr> >(klee_value);
@@ -498,6 +526,20 @@ bool ReplayMemoryAccesses::updateNextMemoryAccess()
 	}
 
 	return false;
+}
+
+void ReplayMemoryAccesses::slotStateFork(S2EExecutionState* originalState,
+                       const std::vector<S2EExecutionState*>& newStates,
+                       const std::vector<klee::ref<klee::Expr> >& newConditions)
+{
+    for (std::vector<S2EExecutionState*>::const_iterator itr = newStates.begin();
+         itr != newStates.end();
+         itr++)
+    {
+        DECLARE_PLUGINSTATE(ReplayMemoryAccessesState, *itr);
+
+        plgState->m_forked = true;
+    }
 }
 
 }
