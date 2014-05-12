@@ -273,7 +273,6 @@ static void machine_init_state(QDict * conf, CPUArchState * cpu) {
 	}
 }
 
-
 static void board_init(ram_addr_t ram_size,
                      const char *boot_device,
                      const char *kernel_filename, const char *kernel_cmdline,
@@ -307,6 +306,7 @@ static void board_init(ram_addr_t ram_size,
 #endif
 
     printf("Configurable: Adding processor %s\n", cpu_model);
+    s2e_cpu_name = strdup(cpu_model);
 
     cpu = cpu_init(cpu_model);
 
