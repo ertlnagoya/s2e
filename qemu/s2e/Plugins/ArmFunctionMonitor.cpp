@@ -182,7 +182,25 @@ void ARMFunctionMonitor::slotTranslateBlockEnd(ExecutionSignal *signal,
     if (!isThumb) {
         if ((opcode & 0x0F000000) == 0x0B000000 ||          // BL  immediate
             (opcode & 0xFE000000) == 0xFA000000)  {         // BLX immediate
-            assert(is_static_target);
+            if ((opcode & 0xFE000000) == 0xFA000000 && !is_static_target)  {         // BLX immediate
+                is_static_target = true;
+                uint32_t signed_immed_24 = opcode & ((1 << 24) - 1);
+                if (signed_immed_24 & (1 << 23))  {
+                    //Sign-extend
+                    signed_immed_24 |= 0xff;
+                }
+                uint32_t h = ((opcode >> 24) << 1) & 0x2;
+                signed_immed_24 = (signed_immed_24 << 2) | h;
+                static_target_pc = (pc + 8 + signed_immed_24) & 0xffffffff;
+                s2e()->getWarningsStream() << "[ARMFunctionMonitor] Hit a bug in Qemu, instruction at " 
+                    << hexval(pc) << " is not disassembled correctly as static branch to " 
+                    << hexval(static_target_pc) << '\n';
+            }
+            else  if (!is_static_target) {
+                s2e()->getWarningsStream() << "[ARMFunctionMonitor] branch with link does not have static target, "
+                    << "even though we expect this from the disassembly (at PC " << hexval(pc) << ")" << '\n';
+                assert(is_static_target);
+            }
             signal->connect(sigc::bind(sigc::mem_fun(*this, &ARMFunctionMonitor::callFunction),
                                         static_target_pc));
         } else if ((opcode & 0x0FF000F0) == 0x01200030)     // BLX<c> register
