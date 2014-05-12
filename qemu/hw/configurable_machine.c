@@ -306,7 +306,9 @@ static void board_init(ram_addr_t ram_size,
 #endif
 
     printf("Configurable: Adding processor %s\n", cpu_model);
+#ifdef CONFIG_S2E
     s2e_cpu_name = strdup(cpu_model);
+#endif /* CONFIG_S2E */
 
     cpu = cpu_init(cpu_model);
 
