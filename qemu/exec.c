@@ -4917,7 +4917,7 @@ tb_page_addr_t get_page_addr_code(CPUArchState *env1, target_ulong addr)
         cpu_unassigned_access(env1, addr, 0, 1, 0, 4);
 #else
 #ifdef CONFIG_S2E
-		printf("Trying to execute code outside RAM or ROM at 0x" TARGET_FMT_lx "\n", addr);
+		printf("Trying to execute code outside RAM or ROM at 0x" TARGET_FMT_lx " in state %" PRId64 "\n", addr, s2e_get_state_id());
 		s2e_kill_current_state();
 #else
         cpu_abort(env1, "Trying to execute code outside RAM or ROM at 0x" TARGET_FMT_lx "\n", addr);

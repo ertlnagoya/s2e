@@ -864,6 +864,10 @@ void s2e_shutdown_request(int signal, unsigned pid)
 	g_s2e->getCorePlugin()->onQemuShutdownRequest.emit(signal, pid);
 }
 
+uint64_t s2e_get_state_id()  {
+    return g_s2e_state->getID();
+}
+
 //Non-S2E modules can redeclare this variable with __attribute__((weak))
 //to check whether they run in S2E or not.
 int g_s2e_linked = 1;

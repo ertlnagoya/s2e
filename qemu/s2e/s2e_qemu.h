@@ -369,6 +369,9 @@ void s2e_shutdown_request(int signal, unsigned pid);
 void helper_register_symbols(void);
 void helper_register_symbol(const char *name, void *address);
 
+/* Helpers for accessing S2E stuff in QEMU */
+uint64_t s2e_get_state_id();
+
 #ifdef __cplusplus
 }
 #endif
