@@ -51,6 +51,7 @@ extern "C" {
 #include <llvm/Support/FileSystem.h>
 
 #include <stdexcept>
+#include <algorithm>
 
 extern "C" CPUArchState* env;
 
@@ -410,7 +411,7 @@ static bool inRanges(uint64_t val, const Snapshot::MemoryRangeList& ranges)
 
 void Snapshot::saveRam(QEMUFile* fh, S2EExecutionState* state, const MemoryRangeList& ranges)
 {
-	RAMBlock *block;
+//	RAMBlock *block;
 	uint32_t section_start = qemu_ftell(fh);
 	qemu_put_byte(fh, S2E_SS_SECTION_START);
 	qemu_put_be32(fh, 0); //dummy length field
@@ -421,49 +422,29 @@ void Snapshot::saveRam(QEMUFile* fh, S2EExecutionState* state, const MemoryRange
 	uint8_t* buf = new uint8_t[TARGET_PAGE_SIZE];
 	assert(buf);
 
-	QLIST_FOREACH(block, &ram_list.blocks, next)
+//	QLIST_FOREACH(block, &ram_list.blocks, next)
+//	{
+	for (MemoryRangeList::const_iterator itr = ranges.begin();
+			 itr != ranges.end();
+			 itr++)
 	{
-		uint64_t mem_base = block->offset;
-		uint64_t mem_size = memory_region_size(block->mr);
-		const char * mem_name = memory_region_name(block->mr);
-		uint64_t mem_end = mem_base + mem_size;
-		uint32_t mem_attrs = 0;
+        const char * mem_name = "";
+        uint64_t address = itr->first;
+        uint64_t size = itr->second;
+        qemu_put_be64(fh, address);
+        qemu_put_be64(fh, size);
+        qemu_put_be32(fh, 0);
+        qemu_put_string(fh, mem_name);
 
-		assert(mem_base % TARGET_PAGE_SIZE == 0);
-		assert(mem_end % TARGET_PAGE_SIZE == 0);
-		for (uint64_t mem_idx = mem_base; mem_idx < mem_end;)
-		{
-			for (; mem_idx < mem_end && !inRanges(mem_idx, ranges); mem_idx += TARGET_PAGE_SIZE)  {
-			}
+        s2e()->getWarningsStream() << "[Snapshot] Dumping memory region "
+                << hexval(address) << "-"
+                << hexval(address + size) << " (" << mem_name << ")" << '\n';
 
-			if (mem_idx >= mem_end)  {
-				break;
-			}
-
-			uint64_t cur_size = 0;
-			for (cur_size = 0;
-				 mem_idx + cur_size < mem_end && inRanges(mem_idx + cur_size, ranges);
-				 cur_size += TARGET_PAGE_SIZE)  {
-
-			}
-
-			qemu_put_be64(fh, mem_idx);
-			qemu_put_be64(fh, cur_size);
-			qemu_put_be32(fh, mem_attrs);
-			qemu_put_string(fh, mem_name);
-
-			s2e()->getWarningsStream() << "[Snapshot] Dumping memory region "
-					<< hexval(mem_idx) << "-"
-					<< hexval(mem_idx + cur_size) << " (" << mem_name << ")" << '\n';
-
-			for (uint64_t i = mem_idx; i < mem_idx + cur_size; i += TARGET_PAGE_SIZE)
-			{
-				state->readMemoryConcrete(i, buf, TARGET_PAGE_SIZE, S2EExecutionState::PhysicalAddress);
-				qemu_put_buffer(fh, buf, TARGET_PAGE_SIZE);
-			}
-
-			mem_idx += cur_size;
-		}
+        for (uint64_t i = address; i < address + size; i += std::min(static_cast<uint64_t>(TARGET_PAGE_SIZE), static_cast<uint64_t>(address + size - i)))
+        {
+            state->readMemoryConcrete(i, buf, TARGET_PAGE_SIZE, S2EExecutionState::PhysicalAddress);
+            qemu_put_buffer(fh, buf, TARGET_PAGE_SIZE);
+        }
 	}
 	delete[] buf;
 
@@ -718,6 +699,7 @@ void Snapshot::takeSnapshot(S2EExecutionState* state, std::string name, unsigned
 		if (flags & SNAPSHOT_MEMORY)  {
 			saveRam(fh, state, ranges);
 		}
+        qemu_put_byte(fh, S2E_SS_EOF);
 	}
 	catch (QemuSnapshotError& err)
 	{
