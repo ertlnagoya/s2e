@@ -98,8 +98,6 @@ void MinStateSpawningSearcher::initialize()
 
     assert(s2e()->getPlugin("Initializer") && "MinStateSpawningSearcher requires Initializer plugin");
     static_cast<Initializer *>(s2e()->getPlugin("Initializer"))->onInitialize.connect(sigc::mem_fun(*this, &MinStateSpawningSearcher::slotInitialize));
-
-	s2e()->getWarningsStream() << "[MinStateSpawningSearcher] Hello world!" << '\n';
 }
 
 void MinStateSpawningSearcher::slotInitialize(S2EExecutionState *state)
@@ -221,10 +219,12 @@ void MinStateSpawningSearcher::slotStateFork(S2EExecutionState* originalState,
                     const std::vector<klee::ref<klee::Expr> >& newConditions)
 {
 	uint64_t forkingPointPenalty = m_forkingPoints[originalState->getPc()];
-	
-	s2e()->getWarningsStream() << "[MinStateSpawningSearcher] Forking at PC " << hexval(originalState->getPc())
-		<< " in state " << originalState->getID() 
-		<< " where forking point has penalty " << forkingPointPenalty << '\n';
+
+	if (m_verbose)  {	
+		s2e()->getWarningsStream() << "[MinStateSpawningSearcher] Forking at PC " << hexval(originalState->getPc())
+			<< " in state " << originalState->getID() 
+			<< " where forking point has penalty " << forkingPointPenalty << '\n';
+	}
 	
 	//Penalize every state starting from the second forking at the same point
 	foreach2(newState, newStates.begin(), newStates.end())
@@ -234,9 +234,11 @@ void MinStateSpawningSearcher::slotStateFork(S2EExecutionState* originalState,
 		uint64_t oldStatePenalty = plgState->m_penalty;
 		//Calculate new penalty
 		plgState->m_penalty =  oldStatePenalty + forkingPointPenalty * m_penaltyFactor;
-		
-		s2e()->getWarningsStream() << "\tstate " << (*newState)->getID() 
-			<< ", old penalty " << oldStatePenalty << ", new penalty " << plgState->m_penalty << '\n';
+	
+		if (m_verbose) {	
+			s2e()->getWarningsStream() << "\tstate " << (*newState)->getID() 
+				<< ", old penalty " << oldStatePenalty << ", new penalty " << plgState->m_penalty << '\n';
+		}
 	}
 	
 	//Increase penalty for forking point
