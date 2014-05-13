@@ -187,7 +187,7 @@ void ARMFunctionMonitor::slotTranslateBlockEnd(ExecutionSignal *signal,
                 uint32_t signed_immed_24 = opcode & ((1 << 24) - 1);
                 if (signed_immed_24 & (1 << 23))  {
                     //Sign-extend
-                    signed_immed_24 |= 0xff;
+                    signed_immed_24 |= 0xff000000;
                 }
                 uint32_t h = ((opcode >> 24) << 1) & 0x2;
                 signed_immed_24 = (signed_immed_24 << 2) | h;
