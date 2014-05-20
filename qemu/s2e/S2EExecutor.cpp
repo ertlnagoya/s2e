@@ -720,6 +720,7 @@ void S2EExecutor::handleGetValue(klee::Executor* executor,
     std::vector<ref<Expr> > result;
     s2eState->kleeReadMemory(kleeAddress, sizeInBytes, NULL, false, true, add_constraint);
 }
+#if 0
 void s2e_symbolic_write_to_concrete_memory(const klee::MemoryObject* mo, klee::ref< klee::Expr > offset, klee::ref< klee::Expr > value)
 {
     if (mo->name == "CpuSystemState" && isa<klee::ConstantExpr>(offset) && cast<klee::ConstantExpr>(offset)->getZExtValue() == 0)
@@ -728,6 +729,7 @@ void s2e_symbolic_write_to_concrete_memory(const klee::MemoryObject* mo, klee::r
     }
 
 }
+#endif
 
 S2EExecutor::S2EExecutor(S2E* s2e, TCGLLVMContext *tcgLLVMContext,
                     const InterpreterOptions &opts,

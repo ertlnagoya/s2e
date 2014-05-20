@@ -32,6 +32,26 @@
 #include <iostream>
 
 namespace s2e {
+
+void s2e_symbolic_write_to_concrete_memory(
+		const klee::MemoryObject* mo,
+		klee::ref< klee::Expr > offset,
+		klee::ref< klee::Expr > value)
+{
+		if (mo->name == "CpuSystemState" &&
+				isa<klee::ConstantExpr>(offset) &&
+				cast<klee::ConstantExpr>(offset)->getZExtValue() == 0) {
+			S2EExecutionState *state = g_s2e_state;
+			std::pair< klee::ref<klee::Expr>, klee::ref<klee::Expr> > res =
+				g_s2e->getExecutor()->getSolver()->
+				getRange(klee::Query(state->constraints, value));
+			uint32_t start = cast<klee::ConstantExpr>(res.first)->getZExtValue();
+			uint32_t end = cast<klee::ConstantExpr>(res.second)->getZExtValue();
+			g_s2e->getWarningsStream() << "writing symbolic value to pc "
+				<< hexval(start) << " " << hexval(end) << "\n";
+		}
+}
+
 namespace plugins {
 
 S2E_DEFINE_PLUGIN(CheckMemoryAccesses,

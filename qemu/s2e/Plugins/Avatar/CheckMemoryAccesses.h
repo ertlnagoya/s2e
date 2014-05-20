@@ -6,6 +6,10 @@
 #include <s2e/S2EExecutionState.h>
 
 namespace s2e {
+void s2e_symbolic_write_to_concrete_memory(
+		const klee::MemoryObject* mo,
+		klee::ref< klee::Expr > offset,
+		klee::ref< klee::Expr > value);
 namespace plugins {
 
 class CheckMemoryAccesses : public Plugin
