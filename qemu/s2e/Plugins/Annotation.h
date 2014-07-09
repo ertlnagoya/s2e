@@ -277,13 +277,13 @@ class LUAAnnotation
 private:
     Annotation *m_plugin;
     bool m_doSkip;
-    bool m_doKill;
     bool m_doGenerateTestcase;
     bool m_isReturn;
     bool m_isInstruction;
     S2EExecutionState *m_state;
 
 public:
+    bool m_doKill;
     static const char className[];
     static Lunar<LUAAnnotation>::RegType methods[];
 
