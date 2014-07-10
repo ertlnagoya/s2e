@@ -39,7 +39,7 @@
 #include <s2e/Plugin.h>
 #include <s2e/Plugins/CorePlugin.h>
 #include <s2e/S2EExecutionState.h>
-#include <s2e/Plugins/MemoryInterceptorMediator.h>
+#include <s2e/Plugins/MemoryInterceptor.h>
 
 
 extern "C" {
@@ -48,11 +48,6 @@ extern "C" {
 
 #include <s2e/cajun/json/reader.h>
 #include <s2e/QemuSocket.h>
-
-//namespace json
-//{
-//    class Object;
-//}
 
 namespace s2e {
 namespace plugins {
@@ -64,16 +59,25 @@ public:
     virtual ~RemoteMemoryInterface();
     void writeMemory(S2EExecutionState*, uint32_t address, int size, uint64_t value);
     uint64_t readMemory(S2EExecutionState*, uint32_t address, int size);
+
+	/* low level operations */
+	void submitRequest(S2EExecutionState *, json::Object &request);
+	bool waitForAnswer(S2EExecutionState *, std::tr1::shared_ptr<json::Object> &response);
+	bool submitAndWait(S2EExecutionState *,
+			json::Object &request,
+			std::tr1::shared_ptr<json::Object> &response);
+	bool buildCPUState(S2EExecutionState *, json::Object &cpu_state, std::string op);
     
     void parse(std::string& token);
+	bool wasHit() {return m_hit;}
+	void resetHit() {m_hit = false;}
+	bool m_writeBack;
     
 private:
     static void * receiveThread(void *);
     void handleClientCommand(std::string cmd, std::tr1::shared_ptr<json::Object> params);
     
     S2E* m_s2e;
-//    CharDriverState * m_chrdev;
-//    std::stringstream m_receiveBuffer;
     QemuMutex m_mutex;
     QemuCond m_responseCond;
     QemuThread m_thread;
@@ -83,71 +87,62 @@ private:
     std::tr1::shared_ptr<s2e::QemuTcpSocket> m_socket;
     S2EExecutionState * m_state;
     bool m_verbose;
+	bool m_hit;
+	void setHit() {m_hit = true;}
 };
-
-// class QemuCharDevice
-// {
-// public:
-//     QemuCharDevice(const char * label, const char * filename);
-//     void write(const char * buffer, int size);
-//     
     
+class RemoteMemoryListener : public MemoryAccessHandler
+{
+public:
+    RemoteMemoryListener(S2E* s2e, RemoteMemoryInterface* remoteMemoryIf, uint64_t address, uint64_t size, uint64_t mask);
 
+    virtual klee::ref<klee::Expr> read(S2EExecutionState *state,
+            klee::ref<klee::Expr> virtaddr,
+            klee::ref<klee::Expr> hostaddr,
+            unsigned size,
+            bool isIO, bool isCode);
+
+    virtual bool write(S2EExecutionState *state,
+                klee::ref<klee::Expr> virtaddr,
+                klee::ref<klee::Expr> hostaddr,
+                klee::ref<klee::Expr> value,
+                bool isIO);
+
+    virtual ~RemoteMemoryListener();
+private:
+    RemoteMemoryInterface* m_remoteMemoryIf;
+};
 
 /**
  *  This is a plugin for aiding in debugging guest code.
  *  XXX: To be replaced by gdb.
  */
-class RemoteMemory : public MemoryInterceptor
+class RemoteMemory : public Plugin
 {
     S2E_PLUGIN
 public:
-    RemoteMemory(S2E* s2e): MemoryInterceptor(s2e) {}
+    RemoteMemory(S2E* s2e)
+        : Plugin(s2e),
+          m_verbose(false)
+    {
+    }
+
     virtual ~RemoteMemory();
 
     void initialize();
+	bool wasHit() {return m_remoteInterface->wasHit();}
+	void resetHit() {m_remoteInterface->resetHit();}
+	std::tr1::shared_ptr<RemoteMemoryInterface> getInterface() {return m_remoteInterface;}
     
 private:
     enum MemoryAccessType {EMemoryAccessType_None, EMemoryAccessType_Read, EMemoryAccessType_Write, EMemoryAccessType_Execute};
     
-    /**
-     * Called whenever memory is accessed.
-     * This function checks the arguments and then calls memoryAccessed() with parsed arguments.
-     */
-    virtual klee::ref< klee::Expr > slotMemoryAccess(S2EExecutionState *state,
-        klee::ref<klee::Expr> virtaddr /* virtualAddress */,
-        klee::ref<klee::Expr> hostaddr /* hostAddress */,
-        klee::ref<klee::Expr> value /* value */,
-        int access_type);
-    
-    /**
-     * slotMemoryAccess forwards the call to this function after the arguments have been parsed and checked.
-     */
-    uint64_t memoryAccessed(S2EExecutionState *, uint64_t address, int width, uint64_t value, MemoryAccessType type);
-    
-    /**
-     * Checks if a command has been received. If so, returns true, otherwise returns false.
-     */
-//    bool receiveCommand(json::Object& command);
-    /**
-     * Blocks until a response has been received.
-     */
-//    void receiveResponse(json::Object& response);
-    
-    void slotTranslateInstructionStart(ExecutionSignal* signal, 
-            S2EExecutionState* state,
-            TranslationBlock* tb,
-            uint64_t pc);
-    void slotExecuteInstructionStart(S2EExecutionState* state, uint64_t pc);
-    
     bool m_verbose;
-//    MemoryMonitor * m_memoryMonitor;
-//    std::tr1::shared_ptr<QemuTcpServerSocket> m_serverSocket;
-//    std::tr1::shared_ptr<QemuTcpSocket> m_remoteSocket;
     std::tr1::shared_ptr<RemoteMemoryInterface> m_remoteInterface;
-    std::vector< std::pair< uint64_t, uint64_t > > ranges;
     
 };
+
+std::string intToHex(uint64_t);
 
 } // namespace plugins
 } // namespace s2e
