@@ -119,15 +119,16 @@ static void stm32_timer_freq(Stm32Timer *s)
 {
     // Why do we need to multiply the frequency by 2?  This is how real hardware
     // behaves.
-    uint32_t clk_freq = 2*stm32_rcc_get_periph_freq(s->stm32_rcc, s->periph) / (s->psc + 1);
-    DPRINTF
+//    uint32_t clk_freq = 2*stm32_rcc_get_periph_freq(s->stm32_rcc, s->periph) / (s->psc + 1);
+    uint32_t clk_freq = 200000;  //   <------ this change the frequency
+/*    DPRINTF
     (
         "%s Update freq = 2 * %d / %d = %d\n",
         stm32_periph_name(s->periph),
         stm32_rcc_get_periph_freq(s->stm32_rcc, s->periph),
         (s->psc + 1),
         clk_freq
-    );
+    );*/
     if(clk_freq != 0) {
         ptimer_set_freq(s->timer, clk_freq);
     }
@@ -200,7 +201,7 @@ static void stm32_timer_update(Stm32Timer *s)
 static void stm32_timer_update_UIF(Stm32Timer *s, uint8_t value) {
     s->sr &= ~0x1; /* update interrupt flag in status reg */
     s->sr |= (value & 0x1);
-
+    printf("interrupt? %d\n", value);
     qemu_set_irq(s->irq, value);
 }
 
@@ -429,17 +430,13 @@ static const MemoryRegionOps stm32_timer_ops = {
 static int stm32_timer_init(SysBusDevice *dev)
 {
     QEMUBH *bh;
-    qemu_irq *clk_irq;
     Stm32Timer *s = STM32_TIMER(dev);
-
-    if(s->stm32_rcc_prop == NULL)
-    {
-        DeviceState *rcc_dev = qdev_create(NULL, "stm32-rcc");
-        qdev_prop_set_uint32(rcc_dev, "osc_freq", 8000000);
-        qdev_prop_set_uint32(rcc_dev, "osc32_freq", 32768);
-        stm32_init_periph(rcc_dev, STM32_RCC_PERIPH, 0x40021000, NULL);
-        qdev_prop_set_ptr(&s->busdev.qdev, "stm32_rcc", rcc_dev);
-    }
+    qemu_irq *clk_irq;
+//    if(s->stm32_rcc_prop == NULL)
+  //  {
+    //    Stm32Rcc *rcc_dev = getStm32Rcc();
+      //  qdev_prop_set_ptr(&s->busdev.qdev, "stm32_rcc", rcc_dev);
+    //}
 
     s->stm32_rcc = (Stm32Rcc *)s->stm32_rcc_prop;
     s->stm32_gpio = (Stm32Gpio **)s->stm32_gpio_prop;
@@ -452,8 +449,8 @@ static int stm32_timer_init(SysBusDevice *dev)
 
     /* Register handlers to handle updates to the TIM's peripheral clock. */
     clk_irq = qemu_allocate_irqs(stm32_timer_clk_irq_handler, (void *)s, 1);
-    stm32_rcc_set_periph_clk_irq(s->stm32_rcc, s->periph, clk_irq[0]);
-
+/*    stm32_rcc_set_periph_clk_irq(s->stm32_rcc, s->periph, clk_irq[0]);
+*/
     bh = qemu_bh_new(stm32_timer_tick, s);
     s->timer = ptimer_init(bh);
 

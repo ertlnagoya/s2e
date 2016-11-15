@@ -21,6 +21,7 @@
 // #include "qjson.h"
 // #include "qlist.h"
 // #include "exec-memory.h"
+#include "arm-misc.h"
 #include "sysbus.h"
 #include "devices.h"
 #include "boards.h"
@@ -470,9 +471,24 @@ static void board_init(ram_addr_t ram_size,
 
             if (strcmp(bus, "sysbus") == 0)
             {
-                //For now only dummy interrupts ...
-                irq = qemu_allocate_irqs(dummy_interrupt, NULL, 1);
-                sysbus_create_simple(qemu_name, address, *irq);
+                if(!strcmp(qemu_name, "stm32-timer")) {
+                    DeviceState *nvic = qdev_create(NULL, "armv7m_nvic");
+                    CPUARMState *env = (CPUARMState *) cpu;
+                    env->nvic = nvic;
+                    qdev_init_nofail(nvic);
+                    qemu_irq *cpu_pic = arm_pic_init_cpu(env);
+                    sysbus_connect_irq(sysbus_from_qdev(nvic), 0, cpu_pic[ARM_PIC_CPU_IRQ]);
+                    int i;
+                    static qemu_irq pic[64];
+                    for (i = 0; i < 64; i++) {
+                        pic[i] = qdev_get_gpio_in(nvic, i);
+                    }
+                    sysbus_create_simple(qemu_name, address, pic[50]);
+                } else {
+                    //For now only dummy interrupts ...
+                    irq = qemu_allocate_irqs(dummy_interrupt, NULL, 1);
+                    sysbus_create_simple(qemu_name, address, *irq);
+                }
             }
             else
             {

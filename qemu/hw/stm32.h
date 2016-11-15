@@ -382,4 +382,6 @@ void stm32_init(
 
 DeviceState *stm32_init_periph(DeviceState *dev, stm32_periph_t periph,
                                         target_phys_addr_t addr, qemu_irq irq);
+
+Stm32Rcc *getStm32Rcc(void);
 #endif /* STM32_H */
