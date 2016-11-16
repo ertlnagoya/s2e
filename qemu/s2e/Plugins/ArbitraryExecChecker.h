@@ -67,6 +67,8 @@ private:
 	std::string str;
     };
 
+    bool m_exit_on_arbitrary_exec;
+
     void onTranslateInstructionStart(
             ExecutionSignal *signal,
             S2EExecutionState* state,

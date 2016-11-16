@@ -69,6 +69,13 @@ ArbitraryExecChecker::~ArbitraryExecChecker()
 
 void ArbitraryExecChecker::initialize()
 {
+    bool ok;
+    m_exit_on_arbitrary_exec = s2e()->getConfig()->getBool(getConfigKey() +
+                                   ".exitOnArbitraryExec", false, &ok);
+    if(!ok)
+    {
+        s2e()->getWarningsStream() << "You should specify " << getConfigKey() <<  ".exitOnArbitraryExec\n";
+    }
     //Attach the signals
     s2e()->getCorePlugin()->onTranslateInstructionStart.connect(
         sigc::mem_fun(*this, &ArbitraryExecChecker::onTranslateInstructionStart));
@@ -177,6 +184,11 @@ void ArbitraryExecChecker::beforeInstruction(
     if (!all_concrete) {
         // Loading TestCaseGenerator you will get a nice testcase to reach this state
         s2e()->getCorePlugin()->onTestCaseGeneration.emit(state, ss.str());
+        if(m_exit_on_arbitrary_exec) {
+            s2e()->getMessagesStream(g_s2e_state) <<
+            "Arbitrary Execution Checker requested exit from S2E\n";
+            ::exit(0);
+        }
         s2e()->getExecutor()->terminateStateEarly(*state, ss.str());
         return;
     }
