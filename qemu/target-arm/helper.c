@@ -3,6 +3,7 @@
 #include "helper.h"
 #include "host-utils.h"
 #if !defined(CONFIG_USER_ONLY)
+#include "hw/sysbus.h"
 #include "hw/loader.h"
 #endif
 #include "sysemu.h"
@@ -469,6 +470,7 @@ CPUARMState *cpu_arm_init(const char *cpu_model)
     CPUARMState *env;
     uint32_t id;
     static int inited = 0;
+    DeviceState * nvic;
 
     id = cpu_arm_find_by_name(cpu_model);
     if (id == 0)
@@ -495,6 +497,10 @@ CPUARMState *cpu_arm_init(const char *cpu_model)
     } else if (arm_feature(env, ARM_FEATURE_VFP)) {
         gdb_register_coprocessor(env, vfp_gdb_get_reg, vfp_gdb_set_reg,
                                  19, "arm-vfp.xml", 0);
+    }
+    if( id == ARM_CPUID_CORTEXM3){
+        nvic = qdev_create(NULL, "armv7m_nvic");
+        env->nvic = nvic;
     }
     qemu_init_vcpu(env);
     return env;
