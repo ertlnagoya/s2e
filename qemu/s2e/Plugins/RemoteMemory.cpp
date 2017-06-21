@@ -58,6 +58,231 @@ extern "C" {
 #include <sstream>
 #include <iomanip>
 
+// #include <iostream>
+#include <iterator>
+#include <vector>
+// #include <sstream>
+#include <algorithm>
+#include <string>
+#include <cstring>
+#include <cstdio>
+#include <cerrno>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+
+
+// see https://stackoverflow.com/questions/12975341/to-string-is-not-a-member-of-std-says-g-mingw#answer-20861692
+namespace std
+{
+    template < typename T > std::string to_string( const T& n )
+    {
+        std::ostringstream stm ;
+        stm << n ;
+        return stm.str() ;
+    }
+}
+
+std::string intToHex(uint64_t val)
+{
+    std::stringstream ss;
+    
+    ss << "0x" << std::hex << val;
+    return ss.str();
+}
+
+static uint64_t hexBufToInt(std::string str)
+{
+    uint64_t val = 0;
+    std::stringstream ss;
+    
+    ss << str;
+    ss >> std::hex >> val;
+
+    return val;
+}
+
+
+std::vector<std::string> split(std::string input)
+{
+    std::stringstream ss(input); // Insert the string into a stream
+    std::vector<std::string> tokens; // Create vector to hold our words
+    std::string buf;
+    while (ss >> buf)
+        tokens.push_back(buf);
+    return tokens;
+}
+
+std::vector<int> split_to_int(std::string input)
+{
+    // std::replace(input.begin(), input.end(), '\t', ' ');
+    std::stringstream ss(input); // Insert the string into a stream
+    std::vector<int> tokens; // Create vector to hold our words
+    std::string buf;
+    while (ss >> buf)
+        // tokens.push_back(std::stoi(buf));
+        tokens.push_back(hexBufToInt(buf));
+    return tokens;
+}
+
+TCPClient::TCPClient(std::string host, int port)
+{
+    /* ソケットの作成 */
+    m_sock = socket(AF_INET, SOCK_STREAM, 0);
+    if(m_sock == -1){
+        std::perror(std::strerror(errno));
+        exit(-1);
+    }
+    /* 接続先指定用構造体の準備 */
+    m_addr.sin_family = AF_INET;
+    m_addr.sin_port = htons(port);
+    m_addr.sin_addr.s_addr = inet_addr(host.c_str());
+    /* サーバに接続 */
+    int err;
+    err = connect(m_sock, (struct sockaddr*)&m_addr, sizeof(m_addr));
+    if(err){
+        std::perror(std::strerror(err));
+        exit(-1);
+    }
+    else{
+        std::cout << "[*] TCPClient: connected to " << host << ":" << port << '\n';
+    }
+}
+
+TCPClient::~TCPClient()
+{
+    close(m_sock);
+}
+
+void TCPClient::sendline(std::string msg)
+{
+    // std::cout << "[*] sending " << msg << '\n';
+    msg += "\n";
+    write(m_sock, msg.c_str(), msg.size());
+}
+
+std::string TCPClient::recvline()
+{
+    char c;
+    int count;
+    m_buf = "";
+    count = read(m_sock, &c, 1);
+    if (c != '\r' && c!= '\0' && count > 0) {
+        m_buf += c;
+    }
+    while(count > 0 && c != '\n'){
+        count = read(m_sock, &c, 1);
+        if(c == '\r'){
+            continue;
+        }
+        if(count > 0 && c!= '\n'){
+            m_buf += c;
+        }
+    }
+    // std::string buf = m_buf;
+    // std::string::size_type pos;
+    // pos = buf.find("\r");
+    // if (pos != std::string::npos) {
+    //     buf.replace(pos, 1, "\\r");
+    // }
+    // pos = buf.find("\n");
+    // if (pos != std::string::npos) {
+    //     buf.replace(pos, 1, "\\n");
+    // }
+    // if(m_buf.size() == 1){
+    //     std::cout << "[*] m_buf[0] = " << (int) m_buf[0] << '\n';
+    // }
+    // std::cout << "[*] TCPClient::recvline(): recieved '" << buf << "' (length = " << m_buf.size() << ")" << '\n';
+    return m_buf;
+}
+
+std::string TCPClient::recvuntil(std::string terminator)
+{
+    char c;
+    int count;
+    unsigned int len_terminator = terminator.size();
+    m_buf = "";
+    while(m_buf.size() < len_terminator){
+        count = read(m_sock, &c, 1);
+        if(count == 0){ // tcp.flag.fin == 1
+            return m_buf;
+        }
+        if(c == '\r'){
+            continue;
+        }
+        m_buf += c;
+    }
+    while(m_buf.find(terminator) == std::string::npos){
+        count = read(m_sock, &c, 1);
+        if(count == 0){ // tcp.flag.fin == 1
+            return m_buf;
+        }
+        if(c == '\r'){
+            continue;
+        }        
+        m_buf += c;
+    }
+    // std::cout << "[*] recieved " << m_buf << '\n';
+    return m_buf;
+}
+
+OpenOCD::OpenOCD():
+    m_openocd("127.0.0.1", 4444)
+{
+    m_openocd.recvline(); // "Open On-Chip Debugger"
+}
+
+OpenOCD::~OpenOCD()
+{
+    std::cout << "[!] Closing OpenOCD Connection!!" << '\n';
+}
+
+std::string OpenOCD::command(std::string cmd, bool expect_response){
+    m_openocd.recvuntil("> ");
+    m_openocd.sendline(cmd);
+    m_openocd.recvline(); // inputed command (echoed)
+    if(expect_response){
+        std::string res = m_openocd.recvline();
+        if (res == "") { // NOTE: sometimes occurs
+            res = m_openocd.recvline();
+        }
+        return res; // FIXME: BAD IMPLEMENTATION
+    }
+    else {
+        return "";
+    }
+}
+
+
+std::vector<int> OpenOCD::mdw(int addr, int count)
+{
+    std::string res;
+    res = command("mdw " + std::to_string(addr) + " " + std::to_string(count)); // compile error 
+    res = res.substr(res.find(":") + 2);
+    return split_to_int(res);
+}
+
+void OpenOCD::mww(int addr, int content)
+{
+    std::string res;
+    res = command("mww " + std::to_string(addr) + " " + std::to_string(content), false);
+    std::cout << res << '\n';
+}
+
+// void print_vector(std::vector<int> vec)
+// {
+//     // std::copy(vec.begin(), vec.end(), std::ostream_iterator<int>(std::cout,", "));
+//     for (int x: vec){
+//         std::cout << intToHex(x) << ",";
+//     }
+//     std::cout << '\n';
+// }
+
 namespace s2e {
 namespace plugins {
     
@@ -171,16 +396,16 @@ std::string intToHex(uint64_t val)
     return ss.str();
 }
 
-static uint64_t hexBufToInt(std::string str)
-{
-    uint64_t val = 0;
-    std::stringstream ss;
+// static uint64_t hexBufToInt(std::string str)
+// {
+//     uint64_t val = 0;
+//     std::stringstream ss;
     
-    ss << str;
-    ss >> std::hex >> val;
+//     ss << str;
+//     ss >> std::hex >> val;
 
-    return val;
-}
+//     return val;
+// }
 
 RemoteMemoryInterface::RemoteMemoryInterface(S2E* s2e, std::string remoteSockAddress, bool verbose) 
     : m_s2e(s2e), 
@@ -315,12 +540,20 @@ uint64_t RemoteMemoryInterface::readMemory(S2EExecutionState * state, uint32_t a
      request.Insert(json::Object::Member("params", params));
      request.Insert(json::Object::Member("cpu_state", cpu_state));
 
-	 std::tr1::shared_ptr<json::Object> response;
-	 submitAndWait(state, request, response);
+	//  std::tr1::shared_ptr<json::Object> response;
+	//  submitAndWait(state, request, response);
 
-	//TODO: There could be multiple responses, but we assume the first is the right
-     json::String& strValue = (*response)["value"];
-     uint64_t ret_val = hexBufToInt(strValue);
+	// //TODO: There could be multiple responses, but we assume the first is the right
+ //     json::String& strValue = (*response)["value"];
+ //     uint64_t ret_val = hexBufToInt(strValue);
+
+     uint64_t ret_val = m_openocd_client.mdw(address, 1)[0];
+     // std::cout << "ret_val = " << ret_val << '\n';
+     // uint64_t ret_val;
+     // for(int i = 0; i < 100; i++){
+     //    std::cout << "Test Loop #" << i << '\n';
+     //    ret_val = m_openocd_client.mdw(address, 1)[0];
+     // }
 
 	if (m_writeBack) {
 #ifdef TARGET_WORDS_BIGENDIAN

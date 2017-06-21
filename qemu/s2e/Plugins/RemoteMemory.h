@@ -49,6 +49,35 @@ extern "C" {
 #include <s2e/cajun/json/reader.h>
 #include <s2e/QemuSocket.h>
 
+std::string intToHex(uint64_t val);
+static uint64_t hexBufToInt(std::string str);
+std::vector<std::string> split(std::string input);
+std::vector<int> split_to_int(std::string input);
+
+class TCPClient {
+public:
+    TCPClient(std::string host, int port);
+    ~TCPClient();
+    void sendline(std::string msg);
+    std::string recvline();
+    std::string recvuntil(std::string terminator);
+private:
+    int m_sock;
+    struct sockaddr_in m_addr;
+    std::string m_buf;
+};
+
+class OpenOCD {
+public:
+    OpenOCD();
+    ~OpenOCD();
+    std::string command(std::string cmd, bool expect_response = true);
+    std::vector<int> mdw(int addr, int count);
+    void mww(int addr, int content);
+private:
+    TCPClient m_openocd;
+};
+
 namespace s2e {
 namespace plugins {
     
@@ -89,6 +118,8 @@ private:
     bool m_verbose;
 	bool m_hit;
 	void setHit() {m_hit = true;}
+
+    OpenOCD m_openocd_client;
 };
     
 class RemoteMemoryListener : public MemoryAccessHandler
